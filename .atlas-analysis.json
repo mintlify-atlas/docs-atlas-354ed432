@@ -1,0 +1,121 @@
+{
+  "projectType": "framework",
+  "projectName": "nvim-treesitter",
+  "projectDescription": "Neovim plugin providing tree-sitter parser management and query abstraction layer",
+  "theme": "aspen",
+  "primaryColor": "#81C784",
+  "lightColor": "#A5D6A7",
+  "darkColor": "#66BB6A",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/parsers",
+              "concepts/queries",
+              "concepts/features"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/setup",
+              "guides/enabling-features",
+              "guides/parser-management",
+              "guides/custom-parsers",
+              "guides/custom-queries"
+            ]
+          },
+          {
+            "group": "Query Development",
+            "pages": [
+              "queries/highlights",
+              "queries/injections",
+              "queries/folds",
+              "queries/indents"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/configuration",
+              "advanced/troubleshooting",
+              "advanced/performance"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/setup",
+              "api/install",
+              "api/update",
+              "api/uninstall",
+              "api/utilities"
+            ]
+          },
+          {
+            "group": "Commands",
+            "pages": [
+              "commands/tsinstall",
+              "commands/tsupdate",
+              "commands/tsuninstall",
+              "commands/tslog"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Contributing",
+        "groups": [
+          {
+            "group": "Development",
+            "pages": [
+              "contributing/overview",
+              "contributing/adding-parsers",
+              "contributing/writing-queries",
+              "contributing/testing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Parser installation and management for 300+ languages",
+    "Syntax highlighting via treesitter queries",
+    "Code folding based on AST structure",
+    "Treesitter-based indentation (experimental)",
+    "Language injection support for multi-language documents",
+    "Custom parser and query configuration"
+  ],
+  "publicApiSurface": [
+    "require('nvim-treesitter').setup(opts)",
+    "require('nvim-treesitter').install(languages, opts)",
+    "require('nvim-treesitter').update(languages, opts)",
+    "require('nvim-treesitter').uninstall(languages, opts)",
+    "require('nvim-treesitter').get_available(tier)",
+    "require('nvim-treesitter').get_installed(type)",
+    "require('nvim-treesitter').indentexpr()",
+    ":TSInstall {language}",
+    ":TSUpdate [language]",
+    ":TSUninstall {language}",
+    ":TSInstallFromGrammar {language}",
+    ":TSLog"
+  ]
+}
