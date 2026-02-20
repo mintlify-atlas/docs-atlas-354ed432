@@ -1,0 +1,215 @@
+---
+title: "Utility Functions"
+description: "Helper functions for querying available and installed parsers"
+---
+
+## get_available(tier)
+
+Return a list of languages available for installation from the parser manifest.
+
+### Parameters
+
+<ParamField path="tier" type="integer" optional>
+  Filter parsers by tier. Valid values:
+  - `1` - stable parsers
+  - `2` - unstable parsers
+  - `3` - unmaintained parsers
+  - `4` - unsupported parsers
+  
+  If omitted, returns parsers from all tiers.
+</ParamField>
+
+### Returns
+
+<ResponseField name="languages" type="string[]">
+  Array of language names available for installation, sorted alphabetically.
+</ResponseField>
+
+### Usage
+
+```lua
+-- Get all available parsers
+local all_parsers = require('nvim-treesitter').get_available()
+print(vim.inspect(all_parsers))
+-- { "bash", "c", "lua", "python", "rust", ... }
+
+-- Get only stable parsers
+local stable = require('nvim-treesitter').get_available(1)
+
+-- Get unstable parsers
+local unstable = require('nvim-treesitter').get_available(2)
+```
+
+### Implementation Notes
+
+- Triggers the `User TSUpdate` autocommand to allow dynamic parser registration
+- Reads from the parser manifest (`nvim-treesitter.parsers` module)
+- Results are always sorted alphabetically
+
+---
+
+## get_installed(type)
+
+Return a list of languages installed via nvim-treesitter.
+
+<Note>
+This only searches nvim-treesitter's configured installation directory. Parsers from other sources placed elsewhere on `runtimepath` are not included.
+</Note>
+
+### Parameters
+
+<ParamField path="type" type="'queries'|'parsers'" optional>
+  Filter installed languages by type:
+  - `"parsers"` - only show languages with installed parsers
+  - `"queries"` - only show languages with installed queries
+  
+  If omitted, returns languages that have either parsers or queries installed.
+</ParamField>
+
+### Returns
+
+<ResponseField name="languages" type="string[]">
+  Array of installed language names.
+</ResponseField>
+
+### Usage
+
+```lua
+-- Get all installed languages (parsers and/or queries)
+local installed = require('nvim-treesitter').get_installed()
+print(vim.inspect(installed))
+-- { "lua", "python", "rust", ... }
+
+-- Get only languages with installed parsers
+local parsers = require('nvim-treesitter').get_installed('parsers')
+
+-- Get only languages with installed queries
+local queries = require('nvim-treesitter').get_installed('queries')
+```
+
+### List All Parsers (Any Source)
+
+To list **all** parsers installed from any source (not just nvim-treesitter):
+
+```lua
+local all_parsers = vim.api.nvim_get_runtime_file('parser/*', true)
+for _, parser in ipairs(all_parsers) do
+  print(parser)
+end
+```
+
+### Implementation Details
+
+The function:
+
+1. Scans the `queries/` directory for query folders (unless `type = 'parsers'`)
+2. Scans the `parser/` directory for `.so` files (unless `type = 'queries'`)
+3. Returns unique language names found in either location
+
+<Info>
+A language may have queries without a parser (queries only) or a parser without queries (parser only). Calling without the `type` parameter returns both.
+</Info>
+
+---
+
+## indentexpr()
+
+Used to enable treesitter-based indentation for a language. This function should be assigned to the `indentexpr` option.
+
+<Warning>
+This function is specifically designed to be called as Vimscript's `indentexpr` and has a special calling convention. It reads from `vim.v.lnum` internally.
+</Warning>
+
+### Parameters
+
+None. The function reads the line number from `vim.v.lnum` (set by Neovim when evaluating indentexpr).
+
+### Returns
+
+<ResponseField name="indent" type="integer">
+  The calculated indentation level in columns for the current line.
+  
+  Special return values:
+  - `-1` - use autoindent (fall back to `cindent` or `smartindent`)
+  - `0` - no indentation
+  - positive integer - specific column position for indentation
+</ResponseField>
+
+### Usage
+
+Enable treesitter indentation in your configuration:
+
+```lua
+-- In init.lua or filetype plugin
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'rust', 'javascript', 'python' },
+  callback = function()
+    vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+  end,
+})
+```
+
+Or in a specific filetype plugin (e.g., `~/.config/nvim/after/ftplugin/rust.lua`):
+
+```lua
+vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+```
+
+### How It Works
+
+1. Gets the current buffer's treesitter parser
+2. Parses the visible window range for performance
+3. Finds the language tree covering the current line
+4. Queries indent captures from the language's `indents.scm` query file
+5. Calculates indentation based on treesitter node hierarchy and indent directives
+
+### Indent Query Captures
+
+The function recognizes these captures in `indents.scm`:
+
+- `@indent.begin` - increase indent for child nodes
+- `@indent.end` - decrease indent  
+- `@indent.align` - align with specific delimiter
+- `@indent.dedent` - dedent current line
+- `@indent.branch` - conditional indent based on branch
+- `@indent.ignore` - preserve existing indentation
+- `@indent.auto` - use autoindent
+- `@indent.zero` - force zero indentation
+
+### Performance Considerations
+
+- Only parses the visible window range (lines between `w0` and `w$`)
+- Uses memoization to cache indent query results per buffer and syntax tree
+- Ignores comment parsers to avoid incorrect indentation in documentation
+
+### Limitations
+
+- Requires a `indents.scm` query file for the language
+- Returns `-1` (fallback to autoindent) if no parser or query is available
+- May not work correctly in injected language regions with complex nesting
+
+### Example Configuration
+
+Complete setup with treesitter features:
+
+```lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'rust', 'lua', 'python' },
+  callback = function()
+    -- Syntax highlighting (Neovim core)
+    vim.treesitter.start()
+    
+    -- Folds (Neovim core)
+    vim.wo.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+    vim.wo.foldmethod = 'expr'
+    
+    -- Indentation (nvim-treesitter)
+    vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+  end,
+})
+```
+
+### See Also
+
+- [Neovim treesitter documentation](https://neovim.io/doc/user/treesitter.html)
+- [Tree-sitter documentation](https://tree-sitter.github.io/tree-sitter/)

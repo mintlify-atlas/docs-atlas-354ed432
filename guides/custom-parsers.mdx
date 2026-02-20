@@ -1,0 +1,382 @@
+---
+title: Custom Parsers
+description: Learn how to add custom or local tree-sitter parsers not in the default nvim-treesitter list
+---
+
+You can add parsers that aren't included in nvim-treesitter's default list, either from a GitHub repository or from a local directory.
+
+## Adding a Parser from GitHub
+
+To add a parser from a GitHub repository:
+
+<Steps>
+  <Step title="Create a User TSUpdate autocommand">
+    Add this configuration before calling `:TSInstall`:
+
+    ```lua init.lua
+    vim.api.nvim_create_autocmd('User', { 
+      pattern = 'TSUpdate',
+      callback = function()
+        require('nvim-treesitter.parsers').zimbu = {
+          install_info = {
+            url = 'https://github.com/zimbulang/tree-sitter-zimbu',
+            revision = 'v1.2.3',  -- Tag or commit hash
+          },
+        }
+      end
+    })
+    ```
+  </Step>
+
+  <Step title="Register the filetype (if needed)">
+    If the parser name differs from Neovim's filetype:
+
+    ```lua
+    vim.treesitter.language.register('zimbu', { 'zu' })
+    ```
+
+    This maps the `zu` filetype to use the `zimbu` parser.
+  </Step>
+
+  <Step title="Install the parser">
+    ```vim
+    :TSInstall zimbu
+    ```
+  </Step>
+</Steps>
+
+## Parser Configuration Options
+
+### Basic Configuration
+
+```lua
+require('nvim-treesitter.parsers').mylang = {
+  install_info = {
+    url = 'https://github.com/username/tree-sitter-mylang',
+    revision = 'abc123',  -- Commit hash or tag
+  },
+}
+```
+
+### Using a Different Branch
+
+```lua
+require('nvim-treesitter.parsers').mylang = {
+  install_info = {
+    url = 'https://github.com/username/tree-sitter-mylang',
+    revision = 'def456',
+    branch = 'develop',  -- Use 'develop' instead of default branch
+  },
+}
+```
+
+<Warning>
+  If you don't specify `revision`, the HEAD of the specified `branch` (or default branch) will be used.
+</Warning>
+
+### Parser in Subdirectory (Monorepo)
+
+If the parser is in a subdirectory of the repository:
+
+```lua
+require('nvim-treesitter.parsers').mylang = {
+  install_info = {
+    url = 'https://github.com/username/monorepo',
+    revision = 'abc123',
+    location = 'packages/tree-sitter-mylang',  -- Subdirectory path
+  },
+}
+```
+
+### Generate Parser from Grammar
+
+If the repository doesn't contain pre-generated `src/parser.c`:
+
+```lua
+require('nvim-treesitter.parsers').mylang = {
+  install_info = {
+    url = 'https://github.com/username/tree-sitter-mylang',
+    revision = 'abc123',
+    generate = true,  -- Run tree-sitter generate
+  },
+}
+```
+
+<Note>
+  This requires `tree-sitter-cli` (0.26.1 or later) in your PATH.
+</Note>
+
+### Generate from grammar.js
+
+If the repository has only `src/grammar.js` (not `src/grammar.json`):
+
+```lua
+require('nvim-treesitter.parsers').mylang = {
+  install_info = {
+    url = 'https://github.com/username/tree-sitter-mylang',
+    revision = 'abc123',
+    generate = true,
+    generate_from_json = false,  -- Generate from grammar.js
+  },
+}
+```
+
+### Install Queries from Repository
+
+If the parser repository includes queries:
+
+```lua
+require('nvim-treesitter.parsers').mylang = {
+  install_info = {
+    url = 'https://github.com/username/tree-sitter-mylang',
+    revision = 'abc123',
+    queries = 'queries/neovim',  -- Directory containing query files
+  },
+}
+```
+
+This copies or symlinks queries from the specified directory in the parser repo.
+
+## Adding a Local Parser
+
+To use a parser from a local directory:
+
+```lua init.lua
+vim.api.nvim_create_autocmd('User', { 
+  pattern = 'TSUpdate',
+  callback = function()
+    require('nvim-treesitter.parsers').mylang = {
+      install_info = {
+        path = '~/code/tree-sitter-mylang',  -- Local directory
+      },
+    }
+  end
+})
+```
+
+<Warning>
+  When using a local path:
+  - The directory is used as-is (no cloning or downloading)
+  - `branch` and `revision` fields are **ignored**
+  - Changes to the directory are immediately reflected
+</Warning>
+
+### Local Parser with Queries
+
+```lua
+require('nvim-treesitter.parsers').mylang = {
+  install_info = {
+    path = '~/code/tree-sitter-mylang',
+    queries = 'queries',  -- Symlink queries from local directory
+  },
+}
+```
+
+### Local Parser in Subdirectory
+
+```lua
+require('nvim-treesitter.parsers').mylang = {
+  install_info = {
+    path = '~/code/monorepo',
+    location = 'parsers/mylang',  -- Parser is in subdirectory
+  },
+}
+```
+
+### Local Parser Requiring Generation
+
+```lua
+require('nvim-treesitter.parsers').mylang = {
+  install_info = {
+    path = '~/code/tree-sitter-mylang',
+    generate = true,  -- Run tree-sitter generate on install
+  },
+}
+```
+
+## Complete Examples
+
+### Example 1: Remote Parser with All Options
+
+```lua init.lua
+vim.api.nvim_create_autocmd('User', { 
+  pattern = 'TSUpdate',
+  callback = function()
+    require('nvim-treesitter.parsers').mylang = {
+      install_info = {
+        url = 'https://github.com/username/tree-sitter-mylang',
+        revision = 'v2.1.0',
+        branch = 'main',
+        location = 'parser',
+        generate = true,
+        generate_from_json = false,
+        queries = 'queries/neovim',
+      },
+    }
+  end
+})
+
+-- Register filetype mapping
+vim.treesitter.language.register('mylang', { 'ml', 'myl' })
+
+-- Install the parser
+vim.defer_fn(function()
+  require('nvim-treesitter').install({ 'mylang' })
+end, 100)
+```
+
+### Example 2: Local Development Parser
+
+```lua init.lua
+vim.api.nvim_create_autocmd('User', { 
+  pattern = 'TSUpdate',
+  callback = function()
+    require('nvim-treesitter.parsers').mydevlang = {
+      install_info = {
+        path = vim.fn.expand('~/code/tree-sitter-mydevlang'),
+        generate = true,
+        queries = 'queries',
+      },
+    }
+  end
+})
+
+vim.treesitter.language.register('mydevlang', 'mdl')
+```
+
+## Modifying Existing Parsers
+
+You can override settings for parsers already in nvim-treesitter:
+
+```lua init.lua
+-- Always generate the Lua parser from grammar
+vim.api.nvim_create_autocmd('User', { 
+  pattern = 'TSUpdate',
+  callback = function()
+    require('nvim-treesitter.parsers').lua.install_info.generate = true
+  end
+})
+```
+
+<CodeGroup>
+```lua Use custom branch
+vim.api.nvim_create_autocmd('User', { 
+  pattern = 'TSUpdate',
+  callback = function()
+    require('nvim-treesitter.parsers').rust.install_info.branch = 'develop'
+  end
+})
+```
+
+```lua Override revision
+vim.api.nvim_create_autocmd('User', { 
+  pattern = 'TSUpdate',
+  callback = function()
+    require('nvim-treesitter.parsers').python.install_info.revision = 'abc123'
+  end
+})
+```
+
+```lua Use local development version
+vim.api.nvim_create_autocmd('User', { 
+  pattern = 'TSUpdate',
+  callback = function()
+    require('nvim-treesitter.parsers').go.install_info.path = '~/code/tree-sitter-go'
+  end
+})
+```
+</CodeGroup>
+
+## Filetype Registration
+
+If Neovim doesn't automatically detect your language's filetype, add a detection rule:
+
+```lua init.lua
+vim.filetype.add({
+  extension = {
+    zu = 'zimbu',
+    zub = 'zimbu',
+  },
+  filename = {
+    ['Zimbufile'] = 'zimbu',
+  },
+  pattern = {
+    ['.*%.zimbu%.conf'] = 'zimbu',
+  },
+})
+
+-- Then map the filetype to parser
+vim.treesitter.language.register('zimbu', 'zimbu')
+```
+
+## External Scanner Requirements
+
+<Warning>
+  If your parser requires an external scanner, it **must** be written in C (not C++).
+</Warning>
+
+External scanners are additional lexers that parsers can use for complex tokenization. If your parser has a `scanner.cc` file, you'll need to ensure it's rewritten in C as `scanner.c`.
+
+## Troubleshooting
+
+### Parser Not Found
+
+Ensure your autocommand runs before `:TSInstall`:
+
+```lua
+-- This should be in init.lua, loaded early
+vim.api.nvim_create_autocmd('User', { 
+  pattern = 'TSUpdate',
+  callback = function()
+    -- Your parser configuration
+  end
+})
+```
+
+### Compilation Fails
+
+1. Check that `tree-sitter-cli` is installed: `tree-sitter --version`
+2. Verify the parser repository is valid
+3. Try generating manually:
+   ```bash
+   cd /path/to/parser
+   tree-sitter generate
+   tree-sitter build
+   ```
+
+### Queries Not Working
+
+If queries aren't loading:
+
+1. Verify the `queries` path is correct
+2. Check query files exist: `ls ~/code/tree-sitter-mylang/queries/`
+3. Manually symlink for testing:
+   ```bash
+   ln -s ~/code/tree-sitter-mylang/queries \
+     ~/.local/share/nvim/site/queries/mylang
+   ```
+
+### Local Parser Not Updating
+
+<Note>
+  Changes to local parsers require reinstallation:
+</Note>
+
+```vim
+:TSUninstall mylang
+:TSInstall mylang
+```
+
+## Best Practices
+
+1. **Pin revisions**: Always specify a `revision` for stability
+2. **Use User TSUpdate**: Ensure modifications happen at the right time
+3. **Test locally first**: Develop parsers locally before publishing
+4. **Include queries**: Provide `highlights.scm` at minimum
+5. **Document filetypes**: Make it clear which filetypes your parser supports
+
+## Next Steps
+
+- [Write custom queries for your parser](/guides/custom-queries)
+- [Enable features for your custom parser](/guides/enabling-features)
+- [Learn about query syntax](https://tree-sitter.github.io/tree-sitter/using-parsers#pattern-matching-with-queries)

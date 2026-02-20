@@ -1,0 +1,566 @@
+---
+title: Tree-sitter features
+description: Overview of syntax highlighting, code folding, indentation, and language injections powered by tree-sitter
+---
+
+nvim-treesitter provides queries that enable four major editor features. While these are not automatically enabled, they offer significant improvements over Vim's traditional regex-based approaches.
+
+<Warning>
+These features are **not automatically enabled**. You must explicitly configure them for each filetype or globally.
+</Warning>
+
+## Syntax highlighting
+
+Tree-sitter highlighting is more accurate and maintainable than regex-based approaches because it's based on the actual syntax tree structure.
+
+### How it works
+
+Highlighting works in three steps:
+
+1. **Parse**: The tree-sitter parser creates a syntax tree
+2. **Query**: `highlights.scm` matches tree nodes to capture names
+3. **Highlight**: Capture names map to highlight groups in your colorscheme
+
+```query
+; From highlights.scm
+(function_definition
+  name: (identifier) @function)
+
+(string) @string
+
+"return" @keyword.return
+```
+
+### Enabling highlighting
+
+<Tabs>
+  <Tab title="Per-filetype (ftplugin)">
+    Create `~/.config/nvim/ftplugin/python.lua`:
+    
+    ```lua
+    vim.treesitter.start()
+    ```
+    
+    This enables highlighting for Python files only.
+  </Tab>
+  
+  <Tab title="Global (autocommand)">
+    In your `init.lua`:
+    
+    ```lua
+    vim.api.nvim_create_autocmd('FileType', {
+      pattern = { 'python', 'javascript', 'rust' },
+      callback = function()
+        vim.treesitter.start()
+      end,
+    })
+    ```
+    
+    This enables highlighting for multiple languages.
+  </Tab>
+  
+  <Tab title="All languages">
+    ```lua
+    vim.api.nvim_create_autocmd('FileType', {
+      pattern = '*',
+      callback = function()
+        local ok = pcall(vim.treesitter.start)
+        if not ok then
+          -- Fallback to default highlighting
+          vim.cmd('syntax on')
+        end
+      end,
+    })
+    ```
+    
+    Enable for all filetypes with a parser.
+  </Tab>
+</Tabs>
+
+<Note>
+Tree-sitter highlighting is provided by Neovim core, not nvim-treesitter. nvim-treesitter only provides the query files.
+</Note>
+
+### Highlight groups
+
+Tree-sitter uses semantic capture names that map to highlight groups:
+
+| Capture | Highlight Group | Description |
+|---------|-----------------|-------------|
+| `@keyword.return` | `@keyword.return` | Return statements |
+| `@function` | `@function` | Function definitions |
+| `@function.call` | `@function.call` | Function calls |
+| `@variable` | `@variable` | Variable names |
+| `@string` | `@string` | String literals |
+| `@comment` | `@comment` | Comments |
+| `@type` | `@type` | Type names |
+
+<Info>
+Use `:Inspect` to see which highlight groups are applied at the cursor position.
+</Info>
+
+### Inspecting highlights
+
+Debug highlighting issues:
+
+```vim
+:Inspect              " Show highlight groups at cursor
+:InspectTree          " View syntax tree
+:EditQuery highlights " Edit and test highlight queries
+```
+
+### Highlight priority
+
+When multiple captures overlap, priority determines precedence:
+
+```query
+; Default priority: 100
+(string) @string
+
+; Higher priority wins
+((string) @string.special
+  (#lua-match? @string.special "^%$")
+  (#set! priority 110))
+```
+
+<Warning>
+Only set priorities between 90-120 to avoid conflicts with diagnostics (110) and LSP semantic tokens (125).
+</Warning>
+
+## Code folding
+
+Tree-sitter folding is based on the syntax tree structure, making it more accurate than indent-based or marker-based folding.
+
+### Enabling folds
+
+```lua
+-- In ftplugin or FileType autocommand
+vim.wo[0][0].foldmethod = 'expr'
+vim.wo[0][0].foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+```
+
+<Note>
+You may also want to set `foldlevel` and `foldnestmax` for better default behavior:
+
+```lua
+vim.wo[0][0].foldlevel = 99    -- start with all folds open
+vim.wo[0][0].foldnestmax = 3   -- limit fold depth
+```
+</Note>
+
+### Defining folds
+
+The `folds.scm` query marks foldable nodes:
+
+```query
+; Functions can be folded
+(function_definition) @fold
+
+; Classes can be folded
+(class_definition) @fold
+
+; Control flow blocks can be folded
+[
+  (if_statement)
+  (for_statement)
+  (while_statement)
+] @fold
+
+; Grouping constructs can be folded
+[
+  (object)
+  (array)
+  (block)
+] @fold
+```
+
+### What should be foldable?
+
+<Tabs>
+  <Tab title="Good fold candidates">
+    - Function and method definitions
+    - Class and interface definitions
+    - Control flow statements (if/while/for)
+    - Blocks with clear delimiters
+    - Arrays and objects
+    - Import statements (consecutive)
+    - Line comments (consecutive)
+    - Documentation blocks
+  </Tab>
+  
+  <Tab title="Poor fold candidates">
+    - Single-line constructs
+    - Multi-line assignments
+    - Chained method calls
+    - Split expressions
+  </Tab>
+</Tabs>
+
+### Fold commands
+
+```vim
+zo  " Open fold under cursor
+zc  " Close fold under cursor
+za  " Toggle fold under cursor
+zR  " Open all folds
+zM  " Close all folds
+```
+
+## Indentation
+
+<Warning>
+Tree-sitter indentation is **experimental** and may have breaking changes in future versions.
+</Warning>
+
+Tree-sitter indentation uses the syntax tree to determine proper indentation levels, providing more intelligent indentation than simple indent-on-tab.
+
+### Enabling indentation
+
+```lua
+-- In ftplugin or FileType autocommand
+vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+```
+
+<Note>
+Note the specific quote usage: double quotes for the string, single quotes for the module name.
+</Note>
+
+### Indent captures
+
+The `indents.scm` query defines indentation behavior:
+
+<Accordion title="@indent.begin">
+Increase indentation for the next line:
+
+```query
+(function_definition) @indent.begin
+(if_statement) @indent.begin
+(for_statement) @indent.begin
+```
+
+Optionally, add immediate indent even when block is empty:
+
+```query
+((if_statement) @indent.begin
+  (#set! indent.immediate 1))
+```
+</Accordion>
+
+<Accordion title="@indent.end">
+Mark the end of an indented region:
+
+```query
+("}" @indent.end)
+("end" @indent.end)
+```
+</Accordion>
+
+<Accordion title="@indent.branch">
+Start dedented region on the same line:
+
+```query
+[
+  "else"
+  "elif"
+  "catch"
+  "finally"
+] @indent.branch
+```
+</Accordion>
+
+<Accordion title="@indent.dedent">
+Dedent on the following line:
+
+```query
+(return_statement) @indent.dedent
+(break_statement) @indent.dedent
+```
+</Accordion>
+
+<Accordion title="@indent.align">
+Align arguments/parameters:
+
+```query
+((argument_list) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+```
+
+This handles both styles:
+
+```python
+foo(a,
+    b,
+    c)
+
+foo(
+  a,
+  b,
+  c
+)
+```
+</Accordion>
+
+<Accordion title="@indent.auto">
+Behave like Vim's `autoindent`:
+
+```query
+(comment) @indent.auto
+```
+</Accordion>
+
+<Accordion title="@indent.ignore and @indent.zero">
+```query
+; Don't change indent for these
+(preprocessor) @indent.ignore
+
+; Remove all indent
+(module_declaration) @indent.zero
+```
+</Accordion>
+
+### Indentation edge cases
+
+#### Avoiding last-line clashes
+
+For Python-style indentation where closing delimiter shouldn't match next line:
+
+```query
+(if_statement
+  condition: (parenthesized_expression) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")")
+  (#set! indent.avoid_last_matching_next 1))
+```
+
+This handles:
+
+```python
+if (a > b and
+    c < d):    # dedented
+    pass       # indented block
+```
+
+## Language injections
+
+Injections enable syntax highlighting for embedded languages (SQL in strings, CSS in HTML, code in markdown).
+
+### How injections work
+
+1. **Detect**: `injections.scm` identifies embedded language regions
+2. **Parse**: A separate parser parses the embedded content
+3. **Highlight**: The embedded language's queries provide highlighting
+
+<Note>
+Injections are automatically enabled when you use tree-sitter highlighting. No additional setup required.
+</Note>
+
+### Injection types
+
+<Tabs>
+  <Tab title="Static language">
+    Explicitly specify the language:
+    
+    ```query
+    ((function_call
+      name: (identifier) @_func
+      arguments: (arguments
+        (string content: _ @injection.content)))
+      (#eq? @_func "sql")
+      (#set! injection.language "sql"))
+    ```
+    
+    Highlights SQL in: `sql("SELECT * FROM users")`
+  </Tab>
+  
+  <Tab title="Dynamic language">
+    Detect language from content:
+    
+    ```query
+    ; Markdown code blocks
+    (fenced_code_block
+      (info_string) @injection.language
+      (code_fence_content) @injection.content)
+    ```
+    
+    The language is extracted from the info string.
+  </Tab>
+  
+  <Tab title="Filename-based">
+    Detect language from filename patterns:
+    
+    ```query
+    ((comment) @injection.filename
+      (#set! injection.filename)
+      (string content: _ @injection.content))
+    ```
+    
+    Uses `vim.filetype.match()` to determine language.
+  </Tab>
+</Tabs>
+
+### Real injection examples
+
+#### Vim commands in Lua
+
+```query
+((function_call
+  name: (_) @_vimcmd
+  arguments: (arguments
+    (string content: _ @injection.content)))
+  (#set! injection.language "vim")
+  (#any-of? @_vimcmd "vim.cmd" "vim.api.nvim_command"))
+```
+
+Highlights:
+
+```lua
+vim.cmd([[
+  highlight Normal guibg=#000000
+  set number
+]])
+```
+
+#### Tree-sitter queries in strings
+
+```query
+(string
+  content: _ @injection.content
+  (#lua-match? @injection.content "^%s*;+%s?query")
+  (#set! injection.language "query"))
+```
+
+Highlights:
+
+```lua
+local query = [[
+  ;; query
+  (function_definition
+    name: (identifier) @function)
+]]
+```
+
+#### HTML in JavaScript
+
+```query
+((template_string) @injection.content
+  (#set! injection.language "html")
+  (#set! injection.combined))
+```
+
+Highlights template literals with HTML:
+
+```javascript
+const html = `
+  <div class="container">
+    <h1>Hello</h1>
+  </div>
+`
+```
+
+### Injection directives
+
+```query
+; Combine adjacent regions
+(#set! injection.combined)
+
+; Include child nodes
+(#set! injection.include-children)
+
+; Adjust region boundaries
+(#offset! @injection.content 0 1 0 -1)
+```
+
+## Feature status by language
+
+Different languages support different features. Check the [supported languages](https://github.com/nvim-treesitter/nvim-treesitter#supported-languages) table:
+
+| Language | Highlights | Folds | Indents | Injections | Locals |
+|----------|:----------:|:-----:|:-------:|:----------:|:------:|
+| python | H | F | I | J | L |
+| rust | H | F | I | J | L |
+| javascript | H | F | I | J | L |
+| lua | H | F | I | J | L |
+| markdown | H | F | I | J | - |
+
+<Info>
+See [SUPPORTED_LANGUAGES.md](https://github.com/nvim-treesitter/nvim-treesitter/blob/main/SUPPORTED_LANGUAGES.md) for the complete feature matrix.
+</Info>
+
+## Combining features
+
+A typical setup enables all features for your preferred languages:
+
+```lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'python', 'rust', 'javascript', 'lua' },
+  callback = function()
+    -- Highlighting
+    vim.treesitter.start()
+    
+    -- Folding
+    vim.wo[0][0].foldmethod = 'expr'
+    vim.wo[0][0].foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+    vim.wo[0][0].foldlevel = 99
+    
+    -- Indentation (experimental)
+    vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+  end,
+})
+```
+
+## Troubleshooting features
+
+### Highlighting doesn't work
+
+1. Check parser is installed: `:checkhealth treesitter`
+2. Verify queries exist: `:echo stdpath('data') . '/site/queries/{lang}'`
+3. Inspect tree: `:InspectTree`
+4. Check highlights: `:Inspect`
+
+### Folding is incorrect
+
+1. Verify fold query exists: `runtime/queries/{lang}/folds.scm`
+2. Check folding is enabled: `:set foldmethod? foldexpr?`
+3. Test fold query: `:EditQuery folds`
+
+### Indentation issues
+
+<Warning>
+Indentation is experimental. Report issues to [nvim-treesitter/nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter/issues).
+</Warning>
+
+1. Check indent query exists: `runtime/queries/{lang}/indents.scm`
+2. Verify `indentexpr` is set correctly
+3. Test with `:IndentBlanklineToggle` if using indent-blankline.nvim
+
+### Injections don't highlight
+
+1. Ensure embedded language parser is installed
+2. Check injection query: `:EditQuery injections`
+3. Verify language name matches parser name
+
+## Performance considerations
+
+Tree-sitter features are generally fast, but can impact performance on very large files:
+
+- **Highlighting**: Incremental and fast for files < 10K lines
+- **Folding**: Calculated once when opening file
+- **Indentation**: Computed per line during editing
+- **Injections**: Adds overhead for embedded languages
+
+<Info>
+For files > 50K lines, consider disabling tree-sitter features:
+
+```lua
+if vim.fn.line('$') > 50000 then
+  vim.treesitter.stop()
+end
+```
+</Info>
+
+## Next steps
+
+Deepen your understanding:
+- [Parsers](/concepts/parsers) - How parsers are installed and managed
+- [Queries](/concepts/queries) - Deep dive into the query language

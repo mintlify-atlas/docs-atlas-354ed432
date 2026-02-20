@@ -1,0 +1,246 @@
+---
+title: Enabling Features
+description: Learn how to enable tree-sitter highlighting, folding, and indentation for your languages
+---
+
+nvim-treesitter provides queries for highlighting, folding, and indentation. **These features are not automatically enabled.** You must explicitly enable them for each language or filetype.
+
+## Enabling Highlighting
+
+Tree-sitter highlighting is provided by Neovim core. There are two ways to enable it:
+
+### Method 1: Using ftplugin Files
+
+Create a file at `~/.config/nvim/ftplugin/<filetype>.lua` with:
+
+```lua python.lua
+vim.treesitter.start()
+```
+
+This enables highlighting automatically when you open Python files.
+
+<CodeGroup>
+```lua lua.lua
+vim.treesitter.start()
+```
+
+```lua javascript.lua
+vim.treesitter.start()
+```
+
+```lua rust.lua
+vim.treesitter.start()
+```
+</CodeGroup>
+
+### Method 2: Using FileType Autocommands
+
+Add this to your `init.lua` to enable highlighting for specific filetypes:
+
+```lua init.lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'python', 'lua', 'javascript' },
+  callback = function() 
+    vim.treesitter.start() 
+  end,
+})
+```
+
+<Note>
+  Replace the `pattern` array with the filetypes you want to enable highlighting for.
+</Note>
+
+### Enable for All Supported Languages
+
+To enable highlighting for all languages with available parsers:
+
+```lua init.lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = '*',
+  callback = function()
+    local ok = pcall(vim.treesitter.start)
+    if not ok then
+      -- Parser not available for this filetype
+    end
+  end,
+})
+```
+
+## Enabling Folds
+
+Tree-sitter-based folding is also provided by Neovim core.
+
+### Method 1: Using ftplugin Files
+
+Create `~/.config/nvim/ftplugin/<filetype>.lua`:
+
+```lua python.lua
+vim.wo[0][0].foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+vim.wo[0][0].foldmethod = 'expr'
+```
+
+### Method 2: Using FileType Autocommands
+
+```lua init.lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'python', 'lua', 'javascript', 'rust' },
+  callback = function()
+    vim.wo[0][0].foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+    vim.wo[0][0].foldmethod = 'expr'
+  end,
+})
+```
+
+<Note>
+  The `[0][0]` syntax sets the option for the current window and buffer.
+</Note>
+
+## Enabling Indentation
+
+Tree-sitter-based indentation is provided by nvim-treesitter and is **experimental**.
+
+<Warning>
+  Tree-sitter indentation is experimental and may not work perfectly for all languages. Test it before committing to it in your workflow.
+</Warning>
+
+### Method 1: Using ftplugin Files
+
+Create `~/.config/nvim/ftplugin/<filetype>.lua`:
+
+```lua python.lua
+vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+```
+
+<Note>
+  Note the specific quote usage: double quotes outside, single quotes inside.
+</Note>
+
+### Method 2: Using FileType Autocommands
+
+```lua init.lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'python', 'lua' },
+  callback = function()
+    vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+  end,
+})
+```
+
+## Complete Example: All Features
+
+Here's how to enable all three features for specific languages:
+
+<CodeGroup>
+```lua ftplugin/python.lua
+-- Enable highlighting
+vim.treesitter.start()
+
+-- Enable folding
+vim.wo[0][0].foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+vim.wo[0][0].foldmethod = 'expr'
+
+-- Enable indentation (experimental)
+vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+```
+
+```lua init.lua
+-- Enable all features via autocommand
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'lua', 'python', 'javascript', 'rust' },
+  callback = function()
+    -- Highlighting
+    vim.treesitter.start()
+    
+    -- Folding
+    vim.wo[0][0].foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+    vim.wo[0][0].foldmethod = 'expr'
+    
+    -- Indentation (experimental)
+    vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+  end,
+})
+```
+</CodeGroup>
+
+## Language Injections
+
+Injections allow tree-sitter to parse multiple languages in a single file (e.g., JavaScript in HTML, SQL in Python strings).
+
+<Note>
+  Injections work automatically once you enable highlighting. No additional setup is needed.
+</Note>
+
+For example, with highlighting enabled for HTML and JavaScript:
+
+```html
+<script>
+  // This JavaScript code is highlighted correctly
+  console.log('Hello!');
+</script>
+```
+
+## Verifying Enabled Features
+
+<Steps>
+  <Step title="Check if highlighting is active">
+    Use `:Inspect` to see which highlight groups are applied at the cursor position. Tree-sitter captures will be shown.
+  </Step>
+  
+  <Step title="Test folding">
+    Try folding a function or block with `zc` (close fold) and `zo` (open fold).
+  </Step>
+  
+  <Step title="Check indentation">
+    Open a new line in a block and verify the indentation is correct using `o` or `O`.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Highlighting Not Working
+
+1. Verify the parser is installed: `:TSInstallInfo`
+2. Check if highlighting queries exist: `:echo nvim_get_runtime_file('queries/' . &filetype . '/highlights.scm', v:true)`
+3. Run `:checkhealth nvim-treesitter`
+
+### Folding Not Working
+
+1. Check if fold queries exist for your language
+2. Verify `foldmethod` is set to `'expr'`: `:set foldmethod?`
+3. Ensure `foldexpr` is set correctly: `:set foldexpr?`
+
+### Indentation Issues
+
+<Warning>
+  Remember that tree-sitter indentation is experimental. You may want to fall back to filetype-specific indentation if you encounter issues.
+</Warning>
+
+```lua
+-- Disable treesitter indentation for a specific filetype
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'python',
+  callback = function()
+    -- Use Python's built-in indentation instead
+    vim.bo.indentexpr = ''
+    vim.bo.autoindent = true
+    vim.bo.smartindent = true
+  end,
+})
+```
+
+## Feature Availability by Language
+
+Not all languages support all features. To check what's available:
+
+```lua
+-- List all installed parsers
+vim.print(require('nvim-treesitter.config').get_installed())
+
+-- Check if a specific query file exists
+vim.print(vim.api.nvim_get_runtime_file('queries/python/highlights.scm', false))
+```
+
+## Next Steps
+
+- [Customize queries for your needs](/guides/custom-queries)
+- [Manage parser installation and updates](/guides/parser-management)

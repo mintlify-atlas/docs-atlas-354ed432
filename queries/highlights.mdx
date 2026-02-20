@@ -1,0 +1,553 @@
+---
+title: Highlight Queries
+description: Complete reference for writing Tree-sitter highlight queries with all valid capture groups for syntax highlighting in Neovim
+---
+
+Highlight queries assign Tree-sitter nodes to capture groups that define syntax highlighting. This feature is implemented in Neovim and documented at [`:h treesitter-highlight`](https://neovim.io/doc/user/treesitter.html#treesitter-highlight).
+
+<Note>
+Your color scheme needs to define (or link) these captures as highlight groups. Use Neovim's built-in `:Inspect` function to see which highlight groups are applied at a given position.
+</Note>
+
+## Basic Structure
+
+Highlight queries use pattern matching to capture nodes:
+
+```query
+(function_definition
+  name: (identifier) @function)
+
+(string) @string
+
+(comment) @comment @spell
+```
+
+## Valid Captures
+
+<Warning>
+The valid captures for Neovim are different from other editors like Helix. You cannot just copy queries from parser repositories. All valid captures are listed below. Verify your queries with `make lintquery`.
+</Warning>
+
+### Identifiers
+
+<ParamField path="@variable" type="capture">
+  Various variable names
+</ParamField>
+
+<ParamField path="@variable.builtin" type="capture">
+  Built-in variable names (e.g. `this`, `self`)
+</ParamField>
+
+<ParamField path="@variable.parameter" type="capture">
+  Parameters of a function
+</ParamField>
+
+<ParamField path="@variable.parameter.builtin" type="capture">
+  Special parameters (e.g. `_`, `it`)
+</ParamField>
+
+<ParamField path="@variable.member" type="capture">
+  Object and struct fields
+</ParamField>
+
+<ParamField path="@constant" type="capture">
+  Constant identifiers
+</ParamField>
+
+<ParamField path="@constant.builtin" type="capture">
+  Built-in constant values
+</ParamField>
+
+<ParamField path="@constant.macro" type="capture">
+  Constants defined by the preprocessor
+</ParamField>
+
+<ParamField path="@module" type="capture">
+  Modules or namespaces
+</ParamField>
+
+<ParamField path="@module.builtin" type="capture">
+  Built-in modules or namespaces
+</ParamField>
+
+<ParamField path="@label" type="capture">
+  GOTO and other labels (e.g. `label:` in C), including heredoc labels
+</ParamField>
+
+### Literals
+
+<ParamField path="@string" type="capture">
+  String literals
+</ParamField>
+
+<ParamField path="@string.documentation" type="capture">
+  String documenting code (e.g. Python docstrings)
+</ParamField>
+
+<ParamField path="@string.regexp" type="capture">
+  Regular expressions
+</ParamField>
+
+<ParamField path="@string.escape" type="capture">
+  Escape sequences
+</ParamField>
+
+<ParamField path="@string.special" type="capture">
+  Other special strings (e.g. dates)
+</ParamField>
+
+<ParamField path="@string.special.symbol" type="capture">
+  Symbols or atoms
+</ParamField>
+
+<ParamField path="@string.special.url" type="capture">
+  URIs (e.g. hyperlinks)
+</ParamField>
+
+<ParamField path="@string.special.path" type="capture">
+  Filenames
+</ParamField>
+
+<ParamField path="@character" type="capture">
+  Character literals
+</ParamField>
+
+<ParamField path="@character.special" type="capture">
+  Special characters (e.g. wildcards)
+</ParamField>
+
+<ParamField path="@boolean" type="capture">
+  Boolean literals
+</ParamField>
+
+<ParamField path="@number" type="capture">
+  Numeric literals
+</ParamField>
+
+<ParamField path="@number.float" type="capture">
+  Floating-point number literals
+</ParamField>
+
+### Types
+
+<ParamField path="@type" type="capture">
+  Type or class definitions and annotations
+</ParamField>
+
+<ParamField path="@type.builtin" type="capture">
+  Built-in types
+</ParamField>
+
+<ParamField path="@type.definition" type="capture">
+  Identifiers in type definitions (e.g. `typedef <type> <identifier>` in C)
+</ParamField>
+
+<ParamField path="@attribute" type="capture">
+  Attribute annotations (e.g. Python decorators, Rust lifetimes)
+</ParamField>
+
+<ParamField path="@attribute.builtin" type="capture">
+  Builtin annotations (e.g. `@property` in Python)
+</ParamField>
+
+<ParamField path="@property" type="capture">
+  The key in key/value pairs
+</ParamField>
+
+### Functions
+
+<ParamField path="@function" type="capture">
+  Function definitions
+</ParamField>
+
+<ParamField path="@function.builtin" type="capture">
+  Built-in functions
+</ParamField>
+
+<ParamField path="@function.call" type="capture">
+  Function calls
+</ParamField>
+
+<ParamField path="@function.macro" type="capture">
+  Preprocessor macros
+</ParamField>
+
+<ParamField path="@function.method" type="capture">
+  Method definitions
+</ParamField>
+
+<ParamField path="@function.method.call" type="capture">
+  Method calls
+</ParamField>
+
+<ParamField path="@constructor" type="capture">
+  Constructor calls and definitions
+</ParamField>
+
+<ParamField path="@operator" type="capture">
+  Symbolic operators (e.g. `+` / `*`)
+</ParamField>
+
+### Keywords
+
+<ParamField path="@keyword" type="capture">
+  Keywords not fitting into specific categories
+</ParamField>
+
+<ParamField path="@keyword.coroutine" type="capture">
+  Keywords related to coroutines (e.g. `go` in Go, `async/await` in Python)
+</ParamField>
+
+<ParamField path="@keyword.function" type="capture">
+  Keywords that define a function (e.g. `func` in Go, `def` in Python)
+</ParamField>
+
+<ParamField path="@keyword.operator" type="capture">
+  Operators that are English words (e.g. `and` / `or`)
+</ParamField>
+
+<ParamField path="@keyword.import" type="capture">
+  Keywords for including or exporting modules (e.g. `import` / `from` in Python)
+</ParamField>
+
+<ParamField path="@keyword.type" type="capture">
+  Keywords describing namespaces and composite types (e.g. `struct`, `enum`)
+</ParamField>
+
+<ParamField path="@keyword.modifier" type="capture">
+  Keywords modifying other constructs (e.g. `const`, `static`, `public`)
+</ParamField>
+
+<ParamField path="@keyword.repeat" type="capture">
+  Keywords related to loops (e.g. `for` / `while`)
+</ParamField>
+
+<ParamField path="@keyword.return" type="capture">
+  Keywords like `return` and `yield`
+</ParamField>
+
+<ParamField path="@keyword.debug" type="capture">
+  Keywords related to debugging
+</ParamField>
+
+<ParamField path="@keyword.exception" type="capture">
+  Keywords related to exceptions (e.g. `throw` / `catch`)
+</ParamField>
+
+<ParamField path="@keyword.conditional" type="capture">
+  Keywords related to conditionals (e.g. `if` / `else`)
+</ParamField>
+
+<ParamField path="@keyword.conditional.ternary" type="capture">
+  Ternary operator (e.g. `?` / `:`)
+</ParamField>
+
+<ParamField path="@keyword.directive" type="capture">
+  Various preprocessor directives & shebangs
+</ParamField>
+
+<ParamField path="@keyword.directive.define" type="capture">
+  Preprocessor definition directives
+</ParamField>
+
+### Punctuation
+
+<ParamField path="@punctuation.delimiter" type="capture">
+  Delimiters (e.g. `;` / `.` / `,`)
+</ParamField>
+
+<ParamField path="@punctuation.bracket" type="capture">
+  Brackets (e.g. `()` / `{}` / `[]`)
+</ParamField>
+
+<ParamField path="@punctuation.special" type="capture">
+  Special symbols (e.g. `{}` in string interpolation)
+</ParamField>
+
+### Comments
+
+<ParamField path="@comment" type="capture">
+  Line and block comments
+</ParamField>
+
+<ParamField path="@comment.documentation" type="capture">
+  Comments documenting code
+</ParamField>
+
+<ParamField path="@comment.error" type="capture">
+  Error-type comments (e.g. `ERROR`, `FIXME`, `DEPRECATED`)
+</ParamField>
+
+<ParamField path="@comment.warning" type="capture">
+  Warning-type comments (e.g. `WARNING`, `FIX`, `HACK`)
+</ParamField>
+
+<ParamField path="@comment.todo" type="capture">
+  Todo-type comments (e.g. `TODO`, `WIP`)
+</ParamField>
+
+<ParamField path="@comment.note" type="capture">
+  Note-type comments (e.g. `NOTE`, `INFO`, `XXX`)
+</ParamField>
+
+### Markup
+
+Mainly for markup languages.
+
+<ParamField path="@markup.strong" type="capture">
+  Bold text
+</ParamField>
+
+<ParamField path="@markup.italic" type="capture">
+  Italic text
+</ParamField>
+
+<ParamField path="@markup.strikethrough" type="capture">
+  Struck-through text
+</ParamField>
+
+<ParamField path="@markup.underline" type="capture">
+  Underlined text (only for literal underline markup!)
+</ParamField>
+
+<ParamField path="@markup.heading" type="capture">
+  Headings, titles (including markers)
+</ParamField>
+
+<ParamField path="@markup.heading.1" type="capture">
+  Top-level heading
+</ParamField>
+
+<ParamField path="@markup.heading.2" type="capture">
+  Section heading
+</ParamField>
+
+<ParamField path="@markup.heading.3" type="capture">
+  Subsection heading
+</ParamField>
+
+<ParamField path="@markup.heading.4" type="capture">
+  Fourth-level heading
+</ParamField>
+
+<ParamField path="@markup.heading.5" type="capture">
+  Fifth-level heading
+</ParamField>
+
+<ParamField path="@markup.heading.6" type="capture">
+  Sixth-level heading
+</ParamField>
+
+<ParamField path="@markup.quote" type="capture">
+  Block quotes
+</ParamField>
+
+<ParamField path="@markup.math" type="capture">
+  Math environments (e.g. `$ ... $` in LaTeX)
+</ParamField>
+
+<ParamField path="@markup.link" type="capture">
+  Text references, footnotes, citations, etc.
+</ParamField>
+
+<ParamField path="@markup.link.label" type="capture">
+  Link, reference descriptions
+</ParamField>
+
+<ParamField path="@markup.link.url" type="capture">
+  URL-style links
+</ParamField>
+
+<ParamField path="@markup.raw" type="capture">
+  Literal or verbatim text (e.g. inline code)
+</ParamField>
+
+<ParamField path="@markup.raw.block" type="capture">
+  Literal or verbatim text as a stand-alone block (use priority 90 for blocks with injections)
+</ParamField>
+
+<ParamField path="@markup.list" type="capture">
+  List markers
+</ParamField>
+
+<ParamField path="@markup.list.checked" type="capture">
+  Checked todo-style list markers
+</ParamField>
+
+<ParamField path="@markup.list.unchecked" type="capture">
+  Unchecked todo-style list markers
+</ParamField>
+
+<ParamField path="@diff.plus" type="capture">
+  Added text (for diff files)
+</ParamField>
+
+<ParamField path="@diff.minus" type="capture">
+  Deleted text (for diff files)
+</ParamField>
+
+<ParamField path="@diff.delta" type="capture">
+  Changed text (for diff files)
+</ParamField>
+
+<ParamField path="@tag" type="capture">
+  XML-style tag names (and similar)
+</ParamField>
+
+<ParamField path="@tag.builtin" type="capture">
+  Builtin tag names (e.g. HTML5 tags)
+</ParamField>
+
+<ParamField path="@tag.attribute" type="capture">
+  XML-style tag attributes
+</ParamField>
+
+<ParamField path="@tag.delimiter" type="capture">
+  XML-style tag delimiters
+</ParamField>
+
+### Non-highlighting Captures
+
+<ParamField path="@conceal" type="capture">
+  Captures that are only meant to be concealed
+</ParamField>
+
+<Note>
+See [`:h tree-sitter-highlight-conceal`](https://neovim.io/doc/user/treesitter.html#treesitter-highlight-conceal). The capture should be meaningful to allow proper highlighting when `set conceallevel=0`. A conceal can be restricted to part of the capture via the [`#offset!` directive](https://neovim.io/doc/user/treesitter.html#treesitter-directive-offset%21).
+</Note>
+
+<ParamField path="@spell" type="capture">
+  For defining regions to be spellchecked
+</ParamField>
+
+<ParamField path="@nospell" type="capture">
+  For defining regions that should NOT be spellchecked
+</ParamField>
+
+<Note>
+The main types of nodes that should be spell checked are:
+- Comments
+- Strings; where it makes sense. Strings that have interpolation or are typically used for non-text purposes are not spell checked (e.g. bash).
+</Note>
+
+## Predicates
+
+Captures can be restricted according to node contents using [predicates](https://neovim.io/doc/user/treesitter.html#treesitter-predicates).
+
+<Note>
+For performance reasons, prefer predicates in this order:
+1. `#eq?` (literal match)
+2. `#any-of?` (one of several literal matches)
+3. `#lua-match?` (match against a [Lua pattern](https://neovim.io/doc/user/luaref.html#lua-pattern))
+4. `#match?`/`#vim-match?` (match against a [Vim regular expression](https://neovim.io/doc/user/pattern.html#regexp))
+</Note>
+
+Besides those provided by Neovim, nvim-treesitter also implements:
+
+```query
+#kind-eq?      ; checks whether a capture corresponds to a given set of nodes
+#any-kind-eq?  ; checks whether any of a list of captures corresponds to a given set of nodes
+```
+
+### Examples
+
+```query
+; Match specific literal
+((identifier) @constant.builtin
+  (#eq? @constant.builtin "self"))
+
+; Match one of several literals
+((identifier) @constant.builtin
+  (#any-of? @constant.builtin "NotImplemented" "Ellipsis" "quit"))
+
+; Match Lua pattern (uppercase followed by uppercase/digits)
+((identifier) @constant
+  (#lua-match? @constant "^[A-Z][A-Z_0-9]*$"))
+```
+
+## Directives
+
+Nodes contain metadata that can be modified via [directives](https://neovim.io/doc/user/treesitter.html#treesitter-directives).
+
+### Priority
+
+Captures can be assigned a priority to control precedence of highlights via the `#set! priority <number>` directive (see [`:h treesitter-highlight-priority`](https://neovim.io/doc/user/treesitter.html#treesitter-highlight-priority)).
+
+<Note>
+The default priority for treesitter highlights is `100`. Queries should only set priorities between `90` and `120`, to avoid conflict with other sources of highlighting (such as diagnostics or LSP semantic tokens).
+</Note>
+
+<Note>
+Precedence is also influenced by pattern order in a query file. If possible, try to achieve the correct result by reordering patterns before resorting to explicit priorities.
+</Note>
+
+### Example
+
+```query
+((decorator
+  "@" @attribute)
+  (#set! priority 101))
+
+(decorator
+  (identifier) @attribute)
+```
+
+## Inheriting Languages
+
+If your language is an extension of another language (TypeScript extends JavaScript, for example), you can include queries from your base language by adding this as the first line:
+
+```query
+; inherits: lang1,(optionallang)
+```
+
+If you want to inherit a language but don't want languages inheriting from yours to inherit it, mark the language as optional (by putting it in parentheses).
+
+## Real-World Examples
+
+### Python Function Highlighting
+
+```query
+; Function definitions
+(function_definition
+  name: (identifier) @function)
+
+; Method definitions
+(class_definition
+  body: (block
+    (function_definition
+      name: (identifier) @function.method)))
+
+; Function calls
+(call
+  function: (identifier) @function.call)
+
+; Method calls
+(call
+  function: (attribute
+    attribute: (identifier) @function.method.call))
+```
+
+### Rust Variable Conventions
+
+```query
+(identifier) @variable
+
+; Assume all-caps names are constants
+((identifier) @constant
+  (#lua-match? @constant "^[A-Z][A-Z%d_]*$"))
+
+; Assume uppercase start = type
+((identifier) @type
+  (#lua-match? @type "^[A-Z]"))
+```
+
+## Tools
+
+The following tools can help when writing highlight queries:
+
+- [ts_query_ls](https://github.com/ribru17/ts_query_ls) - A language server for treesitter queries with validation, autocomplete, and formatting
+- `:InspectTree` - Shows the parsed tree for a buffer and highlights corresponding text
+- `:EditQuery` - Opens a playground to write query patterns and see captures in real-time
+- `make lintquery` - Validates that all captures are valid for Neovim
+- `make checkquery` - Verifies patterns are valid for the parser
+- `make formatquery` - Automatically formats queries to standard style

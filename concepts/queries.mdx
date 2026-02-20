@@ -1,0 +1,530 @@
+---
+title: Tree-sitter queries
+description: Understanding the tree-sitter query language and how nvim-treesitter uses queries to power editor features
+---
+
+Queries are pattern-matching expressions that extract information from syntax trees. They power syntax highlighting, folding, indentation, and language injections in nvim-treesitter.
+
+## What is a query?
+
+A tree-sitter query uses a Lisp-like syntax to match patterns in the syntax tree and assign semantic meaning through **captures**:
+
+```query
+(function_definition
+  name: (identifier) @function)
+```
+
+This matches any function definition and captures the name as `@function`, which can be highlighted by your color scheme.
+
+<Info>
+Queries are stored in `runtime/queries/{language}/*.scm` files. nvim-treesitter includes a comprehensive collection of queries for all supported languages.
+</Info>
+
+## Query types
+
+nvim-treesitter uses five types of query files:
+
+<Tabs>
+  <Tab title="highlights.scm">
+    Defines syntax highlighting by matching syntax tree nodes to highlight groups.
+    
+    ```query
+    "return" @keyword.return
+    
+    (function_definition
+      name: (identifier) @function)
+    
+    (string) @string
+    ```
+    
+    These captures map to highlight groups defined by your colorscheme.
+  </Tab>
+  
+  <Tab title="injections.scm">
+    Specifies embedded languages (like SQL in Python strings or CSS in HTML).
+    
+    ```query
+    ((function_call
+      name: (identifier) @_func
+      arguments: (arguments
+        (string content: _ @injection.content)))
+      (#eq? @_func "sql")
+      (#set! injection.language "sql"))
+    ```
+    
+    This highlights SQL syntax inside `sql("...")` function calls.
+  </Tab>
+  
+  <Tab title="folds.scm">
+    Determines which syntax nodes can be folded.
+    
+    ```query
+    (function_definition) @fold
+    (class_definition) @fold
+    (if_statement) @fold
+    ```
+    
+    These nodes can be collapsed in the editor.
+  </Tab>
+  
+  <Tab title="indents.scm">
+    Controls automatic indentation behavior.
+    
+    ```query
+    (function_definition) @indent.begin
+    
+    [
+      "}"
+      "]"
+      ")"
+    ] @indent.dedent
+    ```
+    
+    This tells the indenter when to increase or decrease indentation.
+  </Tab>
+  
+  <Tab title="locals.scm">
+    Tracks definitions and references (legacy, not used by nvim-treesitter).
+    
+    ```query
+    (function_definition
+      name: (identifier) @local.definition.function)
+    
+    (identifier) @local.reference
+    ```
+    
+    Provided for backward compatibility with external tools.
+  </Tab>
+</Tabs>
+
+## Query syntax fundamentals
+
+### Basic matching
+
+Match nodes by type:
+
+```query
+(function_definition) @function
+```
+
+### Field matching
+
+Match specific fields within a node:
+
+```query
+(function_definition
+  name: (identifier) @function.name
+  parameters: (parameters) @function.params)
+```
+
+### Anonymous nodes
+
+Match literal syntax elements:
+
+```query
+"return" @keyword.return
+"class" @keyword.type
+```
+
+### Alternatives
+
+Match any of several patterns:
+
+```query
+[
+  "if"
+  "else"
+  "elif"
+] @keyword.conditional
+```
+
+### Grouping
+
+Match multiple nodes in sequence:
+
+```query
+(if_statement
+  condition: (_) @condition
+  consequence: (_) @consequence)
+```
+
+## Predicates and directives
+
+### Predicates
+
+Filter matches based on node content:
+
+<Accordion title="#eq? - Exact match">
+```query
+((identifier) @constant
+  (#eq? @constant "True"))
+```
+
+Matches identifiers that are exactly "True".
+</Accordion>
+
+<Accordion title="#any-of? - Multiple options">
+```query
+((identifier) @constant.builtin
+  (#any-of? @constant.builtin "None" "True" "False"))
+```
+
+Matches any of the specified values.
+</Accordion>
+
+<Accordion title="#lua-match? - Pattern matching">
+```query
+((identifier) @constant
+  (#lua-match? @constant "^[A-Z][A-Z_0-9]*$"))
+```
+
+Matches identifiers matching the Lua pattern (all caps).
+</Accordion>
+
+<Accordion title="#vim-match? - Vim regex">
+```query
+((identifier) @constant
+  (#vim-match? @constant "^[A-Z]\\+$"))
+```
+
+Matches using Vim's regular expression syntax.
+</Accordion>
+
+<Warning>
+For performance, prefer predicates in this order:
+1. `#eq?` (fastest)
+2. `#any-of?`
+3. `#lua-match?`
+4. `#vim-match?` (slowest)
+</Warning>
+
+### Directives
+
+Modify capture behavior:
+
+<Accordion title="#set! priority - Control precedence">
+```query
+((comment) @comment
+  (#set! priority 110))
+```
+
+Sets highlight priority (default is 100). Higher priorities override lower ones.
+</Accordion>
+
+<Accordion title="#offset! - Adjust capture range">
+```query
+((string) @string
+  (#offset! @string 0 1 0 -1))
+```
+
+Adjusts the captured range: `(start_row, start_col, end_row, end_col)`.
+</Accordion>
+
+<Accordion title="#set! injection.language - Language injection">
+```query
+((function_call
+  arguments: (arguments (string content: _ @injection.content)))
+  (#set! injection.language "sql"))
+```
+
+Specifies the language for embedded code.
+</Accordion>
+
+## Highlight captures
+
+nvim-treesitter defines standard captures for syntax highlighting. Here are the most common:
+
+### Keywords and operators
+
+```query
+"return" @keyword.return
+"if" @keyword.conditional
+"for" @keyword.repeat
+"import" @keyword.import
+
+"+" @operator
+"and" @keyword.operator
+```
+
+### Identifiers
+
+```query
+(identifier) @variable
+(type_identifier) @type
+
+(function_definition
+  name: (identifier) @function)
+
+(parameter
+  name: (identifier) @variable.parameter)
+```
+
+### Literals
+
+```query
+(string) @string
+(number) @number
+(boolean) @boolean
+(comment) @comment
+
+(escape_sequence) @string.escape
+```
+
+### Functions and methods
+
+```query
+(call_expression
+  function: (identifier) @function.call)
+
+(method_definition
+  name: (property_identifier) @function.method)
+```
+
+<Note>
+See [CONTRIBUTING.md](https://github.com/nvim-treesitter/nvim-treesitter/blob/main/CONTRIBUTING.md#highlights) for the complete list of valid captures.
+</Note>
+
+## Real-world query examples
+
+Here are actual queries from nvim-treesitter:
+
+### Lua highlighting
+
+```query
+; Keywords
+"return" @keyword.return
+
+[
+  "goto"
+  "in"
+  "local"
+] @keyword
+
+(while_statement
+  [
+    "while"
+    "do"
+    "end"
+  ] @keyword.repeat)
+
+(if_statement
+  [
+    "if"
+    "elseif"
+    "else"
+    "then"
+    "end"
+  ] @keyword.conditional)
+
+; Functions
+(function_definition
+  name: [
+    (identifier) @function
+    (dot_index_expression
+      field: (identifier) @function)
+  ])
+
+(function_call
+  name: [
+    (identifier) @function.call
+    (dot_index_expression
+      field: (identifier) @function.call)
+  ])
+```
+
+### Lua injections
+
+```query
+; Vim command injection
+((function_call
+  name: (_) @_vimcmd
+  arguments: (arguments
+    (string content: _ @injection.content)))
+  (#set! injection.language "vim")
+  (#any-of? @_vimcmd "vim.cmd" "vim.api.nvim_command"))
+
+; Query injection in strings
+(string
+  content: _ @injection.content
+  (#lua-match? @injection.content "^%s*;+%s?query")
+  (#set! injection.language "query"))
+
+; LuaDoc comments
+(comment
+  content: (_) @injection.content
+  (#lua-match? @injection.content "^[-][%s]*[@|]")
+  (#set! injection.language "luadoc")
+  (#offset! @injection.content 0 1 0 0))
+```
+
+### Python constant detection
+
+```query
+; Reset highlighting in f-string interpolations
+(interpolation) @none @nospell
+
+; Identifier naming conventions
+((identifier) @type
+  (#lua-match? @type "^[A-Z].*[a-z]"))
+
+((identifier) @constant
+  (#lua-match? @constant "^[A-Z][A-Z_0-9]*$"))
+
+((identifier) @constant.builtin
+  (#lua-match? @constant.builtin "^__[a-zA-Z0-9_]*__$"))
+
+((identifier) @constant.builtin
+  (#any-of? @constant.builtin
+    "NotImplemented" "Ellipsis" "quit" "exit"))
+```
+
+## Query inheritance
+
+Languages can inherit queries from others:
+
+```query
+; inherits: javascript,(jsx)
+```
+
+Place this as the **first line** of your query file.
+
+- `javascript` is required
+- `(jsx)` is optional (only inherited if available)
+
+<Info>
+Typescript queries inherit from Javascript, and C++ queries inherit from C.
+</Info>
+
+## Writing custom queries
+
+You can add or override queries by placing files in your config:
+
+```
+~/.config/nvim/
+  queries/
+    python/
+      highlights.scm
+      injections.scm
+```
+
+### Extending queries
+
+To add patterns without replacing built-in queries:
+
+```query
+; extends
+
+; Your custom patterns here
+((identifier) @my.custom.capture
+  (#eq? @my.custom.capture "special_case"))
+```
+
+The `; extends` directive at the top tells nvim-treesitter to merge your patterns with the default queries.
+
+### Ignoring formatting
+
+Preserve specific formatting:
+
+```query
+; format-ignore
+(complex_node
+  (deeply) (nested)
+    (structure))
+```
+
+## Query development tools
+
+### Tree-sitter playground
+
+Use Neovim's built-in tools:
+
+```vim
+:InspectTree    " View syntax tree
+:EditQuery      " Test query patterns
+:Inspect        " Show highlight groups
+```
+
+<Note>
+`:InspectTree` opens a live view of the syntax tree that updates as you edit. Click nodes to see their source location.
+</Note>
+
+### Query validation
+
+Validate your queries:
+
+```bash
+# Lint all queries
+make lintquery
+
+# Check query validity
+make checkquery
+
+# Format queries
+make formatquery
+```
+
+Or use the all-in-one command:
+
+```bash
+make query
+```
+
+### ts_query_ls
+
+Install [ts_query_ls](https://github.com/ribru17/ts_query_ls) for:
+- Query autocomplete
+- Syntax validation
+- Formatting
+- Documentation on hover
+
+## Query performance tips
+
+1. **Use specific node types** instead of wildcards when possible
+2. **Order predicates** from fastest to slowest (see warning above)
+3. **Avoid overly broad patterns** that match too many nodes
+4. **Use field matching** to narrow down matches
+5. **Set priorities** only when necessary
+
+<Warning>
+Queries run on every keystroke during highlighting. Inefficient queries can noticeably slow down editing.
+</Warning>
+
+## Common patterns
+
+### Spell checking
+
+```query
+(comment) @spell
+(string) @spell
+
+; Disable spell check in code
+(function_call) @nospell
+```
+
+### Concealing
+
+```query
+((operator) @conceal
+  (#eq? @conceal "->")
+  (#set! conceal "→"))
+```
+
+### Context-aware highlighting
+
+```query
+; Highlight TODO in comments
+((comment) @comment.error
+  (#lua-match? @comment.error "TODO|FIXME|BUG"))
+
+; Highlight docstring differently
+(function_definition
+  body: (block
+    (expression_statement
+      (string) @string.documentation)))
+```
+
+## Next steps
+
+Learn how queries power specific features:
+- [Features](/concepts/features) - Highlights, folds, indents, and injections
+- [Parsers](/concepts/parsers) - Understanding the foundation of tree-sitter

@@ -1,0 +1,445 @@
+---
+title: Performance Optimization
+description: Optimize parser installation, compilation, and memory usage in nvim-treesitter
+---
+
+This guide covers performance considerations for nvim-treesitter, focusing on installation operations, asynchronous execution, and resource management.
+
+## Asynchronous Operations
+
+nvim-treesitter performs installation operations asynchronously by default, allowing Neovim to remain responsive during long-running tasks.
+
+### How Async Works
+
+The async implementation (lua/nvim-treesitter/async.lua) provides:
+
+- **Non-blocking I/O** for network downloads and file operations
+- **Parallel task execution** for installing multiple parsers
+- **Graceful cancellation** when operations are interrupted
+- **Error handling** with detailed stack traces
+
+<Tip>
+  All installation, update, and uninstall operations return an async task that you can `await()` or `wait()` on.
+</Tip>
+
+### Async vs Synchronous Installation
+
+**Asynchronous (default):**
+```lua
+-- Returns immediately, runs in background
+require('nvim-treesitter').install({ 'rust', 'lua', 'python' })
+
+-- Neovim remains responsive
+-- You can continue editing while parsers install
+```
+
+**Synchronous (blocking):**
+```lua
+-- Blocks until complete (useful for bootstrap scripts)
+require('nvim-treesitter').install({ 'rust', 'lua', 'python' })
+  :wait(300000) -- timeout in milliseconds (5 minutes)
+
+-- Execution continues only after installation completes
+```
+
+### Handling Async Tasks
+
+**Wait with timeout:**
+```lua
+local task = require('nvim-treesitter').install('rust')
+
+-- Wait up to 60 seconds
+local ok, result = task:pwait(60000)
+if not ok then
+  print("Installation failed: " .. result)
+else
+  print("Installation successful")
+end
+```
+
+**Use callbacks:**
+```lua
+local task = require('nvim-treesitter').install('rust')
+
+task:await(function(err, result)
+  if err then
+    print("Error: " .. err)
+  else
+    print("Success!")
+  end
+end)
+```
+
+**Cancel running task:**
+```lua
+local task = require('nvim-treesitter').install({ 'rust', 'lua', 'python' })
+
+-- Later, cancel if needed
+task:close()
+```
+
+## Parallel Installation
+
+By default, nvim-treesitter installs up to **100 parsers in parallel** (lua/nvim-treesitter/install.lua:60). This significantly speeds up bulk installations.
+
+### How Parallel Installation Works
+
+The `join()` function (lua/nvim-treesitter/install.lua:66-91) manages parallel task execution:
+
+1. Up to `max_jobs` tasks run simultaneously
+2. As each task completes, a new one starts from the queue
+3. All tasks must complete before the operation finishes
+
+### Controlling Parallelism
+
+Use the `max_jobs` option to limit concurrent installations:
+
+```lua
+require('nvim-treesitter').install(
+  { 'rust', 'lua', 'python', 'javascript', 'typescript' },
+  { max_jobs = 2 }
+)
+```
+
+**When to limit parallel jobs:**
+
+<AccordionGroup>
+  <Accordion title="Limited Memory Systems">
+    Each parser compilation can use 200-500MB of RAM. On systems with limited memory:
+
+    ```lua
+    -- Install one parser at a time to avoid OOM
+    require('nvim-treesitter').install('all', { max_jobs = 1 })
+    ```
+
+    This trades speed for memory efficiency.
+  </Accordion>
+
+  <Accordion title="Low Bandwidth Connections">
+    Parallel downloads may saturate bandwidth and cause timeouts:
+
+    ```lua
+    -- Limit to 3 concurrent downloads
+    require('nvim-treesitter').install('stable', { max_jobs = 3 })
+    ```
+  </Accordion>
+
+  <Accordion title="Shared Build Servers">
+    When building on shared infrastructure:
+
+    ```lua
+    -- Be considerate of other users
+    require('nvim-treesitter').install(
+      { 'rust', 'go', 'python' },
+      { max_jobs = 4 }
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="Grammar Generation">
+    When using `generate = true`, each task runs `tree-sitter generate` which is CPU and memory intensive:
+
+    ```lua
+    require('nvim-treesitter').install(
+      'rust',
+      { 
+        generate = true,
+        max_jobs = 2  -- Reduce parallelism for generation
+      }
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Update Operations
+
+The `max_jobs` option also applies to updates:
+
+```lua
+-- Update all parsers with limited parallelism
+require('nvim-treesitter').update(nil, { max_jobs = 4 })
+```
+
+## Installation Timeouts
+
+Each parser installation has a **60-second timeout** (lua/nvim-treesitter/install.lua:61). If another installation of the same language is already running, the installer waits for it to complete.
+
+### Handling Timeouts
+
+If installations frequently timeout:
+
+1. **Check network connectivity:**
+   ```bash
+   curl -w "\nTime: %{time_total}s\n" -o /dev/null \
+     https://github.com/tree-sitter/tree-sitter-rust/archive/HEAD.tar.gz
+   ```
+
+2. **Increase wait timeout for manual installations:**
+   ```lua
+   -- Wait up to 5 minutes per parser
+   require('nvim-treesitter').install('rust'):wait(300000)
+   ```
+
+3. **Install problematic parsers individually:**
+   ```vim
+   :TSInstall rust
+   :TSInstall lua
+   ```
+
+## Memory Optimization
+
+### Installation Memory Usage
+
+Each parser installation involves:
+- **Download**: Minimal memory (streaming)
+- **Extraction**: ~50-100MB temporary disk space
+- **Compilation**: 200-500MB RAM per parser
+- **Installation**: Minimal (file copy)
+
+### Reducing Memory Footprint
+
+**Sequential installation (lowest memory):**
+```lua
+local languages = { 'rust', 'lua', 'python', 'javascript', 'go' }
+
+for _, lang in ipairs(languages) do
+  require('nvim-treesitter').install(lang):wait()
+end
+```
+
+**Batched installation (balanced):**
+```lua
+-- Install in groups of 3
+local batch_size = 3
+local languages = { 'rust', 'lua', 'python', 'javascript', 'go', 'cpp' }
+
+for i = 1, #languages, batch_size do
+  local batch = vim.list_slice(languages, i, i + batch_size - 1)
+  require('nvim-treesitter').install(batch, { max_jobs = batch_size }):wait()
+end
+```
+
+### Cleanup Temporary Files
+
+Temporary files are automatically cleaned up after installation (lua/nvim-treesitter/install.lua:434-438):
+
+- Downloaded tarballs are deleted after extraction
+- Extracted source directories are removed after compilation
+- Only the compiled `.so` parser and query symlinks remain
+
+You can also manually clean the cache directory:
+
+```lua
+local cache_dir = vim.fn.stdpath('cache')
+print("Cache directory: " .. cache_dir)
+
+-- Remove tree-sitter related cache files
+vim.fn.delete(cache_dir .. '/tree-sitter-*', 'rf')
+```
+
+## Network Performance
+
+### Download Optimization
+
+Parsers are downloaded from GitHub as tarballs (lua/nvim-treesitter/install.lua:199-227):
+
+```lua
+-- Downloads: https://github.com/[org]/[repo]/archive/[revision].tar.gz
+```
+
+The downloader:
+- Uses `curl` with retry logic (7 attempts)
+- Follows redirects automatically (`-L`)
+- Shows minimal output (`--silent --show-error`)
+- Caches downloads in `stdpath('cache')`
+
+### Proxy Configuration
+
+If you're behind a proxy, configure curl:
+
+```bash
+# In your shell profile
+export http_proxy=http://proxy.example.com:8080
+export https_proxy=http://proxy.example.com:8080
+```
+
+Or in Neovim:
+
+```lua
+vim.env.http_proxy = 'http://proxy.example.com:8080'
+vim.env.https_proxy = 'http://proxy.example.com:8080'
+```
+
+### Offline Installation
+
+For air-gapped systems, you can use local parser repositories:
+
+```lua
+local parsers = require('nvim-treesitter.parsers')
+
+-- Override parser configuration to use local path
+parsers['rust'] = {
+  install_info = {
+    path = "/path/to/local/tree-sitter-rust",
+  },
+}
+
+require('nvim-treesitter').install('rust')
+```
+
+The installer will:
+- Use the local directory instead of downloading
+- Compile from the local source
+- Link queries from the local repository if available
+
+## Compilation Performance
+
+### Tree-sitter Build
+
+Parsers are compiled using `tree-sitter build` (lua/nvim-treesitter/install.lua:279-291):
+
+```bash
+tree-sitter build -o parser.so
+```
+
+This command:
+- Compiles the parser with optimizations
+- Links against the tree-sitter runtime
+- Produces a shared library (`.so`, `.dll`, or `.dylib`)
+
+### Grammar Generation
+
+When using `generate = true`, the grammar is regenerated before compilation:
+
+```bash
+tree-sitter generate --abi <version> [src/grammar.json]
+```
+
+This is **significantly slower** and **more memory-intensive** than using prebuilt parser.c files.
+
+**When to use grammar generation:**
+
+<Tip>
+  Only use `generate = true` when the provided parser.c is outdated or incompatible with your Neovim's ABI version.
+</Tip>
+
+```vim
+:TSInstallFromGrammar rust
+```
+
+Equivalent to:
+```lua
+require('nvim-treesitter').install('rust', { generate = true })
+```
+
+## Query Performance
+
+### Query Installation
+
+Queries are installed by symlinking (Unix) or copying (Windows) from the runtime directory (lua/nvim-treesitter/install.lua:411-432).
+
+**Symlink (preferred):**
+- Fast (instant)
+- No disk space duplication
+- Automatically reflects updates to bundled queries
+
+**Copy (Windows):**
+- Slower for large query collections
+- Duplicates disk space
+- Requires manual updates
+
+### Query Cache
+
+Neovim caches parsed queries in memory. Clear the cache if queries are modified:
+
+```lua
+vim.treesitter.query.invalidate_cache()
+```
+
+## Monitoring Performance
+
+### Installation Progress
+
+Enable logging to monitor installation performance:
+
+```lua
+-- Install with summary
+require('nvim-treesitter').install(
+  { 'rust', 'lua', 'python' },
+  { summary = true }
+)
+
+-- View detailed logs
+vim.cmd('TSLog')
+```
+
+The logs show:
+- Download times
+- Compilation duration
+- File operations
+- Error messages
+
+### Profiling
+
+Profile installation time:
+
+```lua
+local start = vim.uv.hrtime()
+
+require('nvim-treesitter').install({ 'rust', 'lua', 'python' }):wait()
+
+local elapsed = (vim.uv.hrtime() - start) / 1e9
+print(string.format("Installation took %.2f seconds", elapsed))
+```
+
+## Best Practices
+
+<Tip>
+  **For bootstrap scripts**, use synchronous installation with appropriate timeouts:
+
+  ```lua
+  local ts = require('nvim-treesitter')
+  ts.install({ 'lua', 'vim', 'vimdoc' }):wait(300000)
+  ```
+</Tip>
+
+<Tip>
+  **For bulk installations**, use `summary = true` to see completion statistics:
+
+  ```lua
+  require('nvim-treesitter').install('stable', { summary = true })
+  ```
+</Tip>
+
+<Tip>
+  **On memory-constrained systems**, limit parallelism:
+
+  ```lua
+  require('nvim-treesitter').install('all', { max_jobs = 2 })
+  ```
+</Tip>
+
+<Warning>
+  **Don't generate grammars unnecessarily.** Pre-built parser.c files are optimized and much faster to compile.
+</Warning>
+
+## Startup Performance
+
+Parser loading has minimal impact on Neovim startup:
+- Parsers are loaded on-demand per filetype
+- Compiled parsers are memory-mapped (not copied)
+- Queries are parsed once and cached
+
+To measure treesitter's startup impact:
+
+```bash
+nvim --startuptime startup.log
+```
+
+Look for lines containing "treesitter" to see timing breakdown.
+
+## See Also
+
+- [Configuration](/advanced/configuration) - Custom installation directory setup
+- [Troubleshooting](/advanced/troubleshooting) - Common performance issues
+- [API Reference](/api-reference) - Installation options reference

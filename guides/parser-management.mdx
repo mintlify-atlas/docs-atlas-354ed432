@@ -1,0 +1,403 @@
+---
+title: Parser Management
+description: Learn how to install, update, and uninstall tree-sitter parsers
+---
+
+Parsers are the core of tree-sitter functionality. This guide covers how to manage parser installation, updates, and removal.
+
+## Installing Parsers
+
+### Install Specific Languages
+
+To install parsers for specific languages:
+
+```lua
+require('nvim-treesitter').install({ 'rust', 'javascript', 'zig' })
+```
+
+<Note>
+  The `install()` function runs asynchronously by default and returns immediately.
+</Note>
+
+### Using Commands
+
+You can also use Ex commands:
+
+```vim
+:TSInstall rust javascript zig
+```
+
+### Install Multiple Languages
+
+<CodeGroup>
+```lua Lua API
+require('nvim-treesitter').install({
+  'lua',
+  'python', 
+  'javascript',
+  'typescript',
+  'rust',
+  'go'
+})
+```
+
+```vim Commands
+:TSInstall lua python javascript typescript rust go
+```
+</CodeGroup>
+
+### Install by Tier
+
+Parsers are organized into tiers based on stability:
+
+- **Tier 1** (stable): Track versioned releases
+- **Tier 2** (unstable): Track latest commits
+- **Tier 3** (unmaintained): No active maintenance
+- **Tier 4** (unsupported): Not recommended
+
+```vim
+" Install all stable parsers
+:TSInstall stable
+
+" Install all unstable parsers
+:TSInstall unstable
+```
+
+### Install All Available Parsers
+
+<Warning>
+  Installing all parsers can take significant time and disk space.
+</Warning>
+
+```lua
+require('nvim-treesitter').install('all')
+```
+
+Or via command:
+
+```vim
+:TSInstall all
+```
+
+## Updating Parsers
+
+### Update Specific Parsers
+
+Update one or more parsers:
+
+```lua
+require('nvim-treesitter').update({ 'rust', 'lua' })
+```
+
+Or via command:
+
+```vim
+:TSUpdate rust lua
+```
+
+### Update All Installed Parsers
+
+```lua
+require('nvim-treesitter').update()
+```
+
+Or via command:
+
+```vim
+:TSUpdate
+```
+
+<Note>
+  Running `:TSUpdate` with no arguments updates all installed parsers.
+</Note>
+
+### How Updates Work
+
+When you update a parser, nvim-treesitter:
+
+1. Checks the installed revision against the target revision
+2. Downloads the source code if an update is available
+3. Compiles the parser using `tree-sitter build`
+4. Installs the compiled `.so` file
+5. Updates or links query files
+
+Parsers are only updated if the revision has changed.
+
+## Uninstalling Parsers
+
+### Uninstall Specific Parsers
+
+```lua
+require('nvim-treesitter').uninstall({ 'rust', 'zig' })
+```
+
+Or via command:
+
+```vim
+:TSUninstall rust zig
+```
+
+### Uninstall All Parsers
+
+<Warning>
+  This removes all parsers managed by nvim-treesitter.
+</Warning>
+
+```lua
+require('nvim-treesitter').uninstall('all')
+```
+
+Or via command:
+
+```vim
+:TSUninstall all
+```
+
+## Advanced Installation Options
+
+### Force Reinstall
+
+Force reinstallation even if the parser is already installed:
+
+```lua
+require('nvim-treesitter').install(
+  { 'rust', 'lua' },
+  { force = true }
+)
+```
+
+This is useful when:
+- A parser installation failed previously
+- You want to recompile with new compiler flags
+- Query files need to be regenerated
+
+### Generate from Grammar
+
+Some parsers don't include a pre-generated `src/parser.c`. Force generation:
+
+```lua
+require('nvim-treesitter').install(
+  { 'zimbu' },
+  { generate = true }
+)
+```
+
+<Warning>
+  Generating parsers requires `tree-sitter-cli` (0.26.1 or later) in your PATH.
+</Warning>
+
+### Control Parallelism
+
+By default, up to 100 parsers can install concurrently. Adjust this:
+
+```lua
+require('nvim-treesitter').install(
+  { 'rust', 'lua', 'python', 'go' },
+  { max_jobs = 4 }
+)
+```
+
+### Show Installation Summary
+
+```lua
+require('nvim-treesitter').install(
+  'all',
+  { summary = true }
+)
+```
+
+This displays a message like: `Installed 45/50 languages`
+
+## Synchronous Installation
+
+For scripts or bootstrapping, wait for installation to complete:
+
+```lua
+-- Wait up to 5 minutes for installation
+local success = require('nvim-treesitter').install({
+  'rust',
+  'javascript',
+  'zig'
+}):wait(300000)
+
+if success then
+  print('All parsers installed successfully')
+else
+  print('Some parsers failed to install')
+end
+```
+
+<Steps>
+  <Step title="Call install()">
+    The function returns a handle that can be waited on.
+  </Step>
+  
+  <Step title="Call :wait(timeout)">
+    Specify timeout in milliseconds. The call blocks until completion or timeout.
+  </Step>
+  
+  <Step title="Check return value">
+    Returns `true` if all parsers installed successfully.
+  </Step>
+</Steps>
+
+## Checking Installation Status
+
+### List All Available Parsers
+
+```vim
+:TSInstallInfo
+```
+
+This shows all parsers with their installation status.
+
+### Check Installed Parsers Programmatically
+
+```lua
+local installed = require('nvim-treesitter.config').get_installed()
+vim.print(installed)  -- { 'lua', 'python', 'rust', ... }
+```
+
+### Check Available Parsers
+
+```lua
+local available = require('nvim-treesitter.config').get_available()
+vim.print(available)  -- All parsers in nvim-treesitter
+```
+
+### Check Parsers by Tier
+
+```lua
+-- Get only tier 1 (stable) parsers
+local stable = require('nvim-treesitter.config').get_available(1)
+
+-- Get only tier 2 (unstable) parsers  
+local unstable = require('nvim-treesitter.config').get_available(2)
+```
+
+## Parser Versioning
+
+<Note>
+  nvim-treesitter is only guaranteed to work with specific parser versions specified in the plugin's `parsers.lua` manifest.
+</Note>
+
+Each parser entry in `lua/nvim-treesitter/parsers.lua` specifies:
+
+```lua
+rust = {
+  install_info = {
+    url = 'https://github.com/tree-sitter/tree-sitter-rust',
+    revision = 'v0.21.0',  -- Pinned version
+  },
+  maintainers = { '@amaanq' },
+  tier = 1,
+}
+```
+
+When you run `:TSUpdate`, parsers are updated to their pinned revision.
+
+## Installation Directories
+
+Parsers are installed to directories within `install_dir`:
+
+```
+install_dir/
+├── parser/              # Compiled .so files
+│   ├── lua.so
+│   ├── python.so
+│   └── rust.so
+├── queries/             # Query files (symlinked or copied)
+│   ├── lua/
+│   ├── python/
+│   └── rust/
+└── parser-info/         # Revision tracking
+    ├── lua.revision
+    ├── python.revision
+    └── rust.revision
+```
+
+## Troubleshooting
+
+### Installation Fails
+
+1. Check you have required tools: `tar`, `curl`, `tree-sitter`, C compiler
+2. Run `:checkhealth nvim-treesitter`
+3. Check install logs: `:messages`
+4. Try force reinstall: `:TSInstall! <language>`
+
+### Parser Compilation Errors
+
+<Warning>
+  Ensure your C compiler is compatible. See [cc crate requirements](https://docs.rs/cc/latest/cc/#compile-time-requirements).
+</Warning>
+
+```bash
+# Test your compiler
+cc --version
+
+# Test tree-sitter CLI
+tree-sitter --version
+```
+
+### Wrong Parser Version
+
+```lua
+-- Force update to correct revision
+require('nvim-treesitter').update({ 'rust' }, { force = true })
+```
+
+### Clean Install
+
+To completely reinstall all parsers:
+
+<Steps>
+  <Step title="Uninstall all parsers">
+    ```vim
+    :TSUninstall all
+    ```
+  </Step>
+  
+  <Step title="Clear cache">
+    ```bash
+    rm -rf ~/.cache/nvim/tree-sitter
+    ```
+  </Step>
+  
+  <Step title="Reinstall">
+    ```vim
+    :TSInstall lua python rust
+    ```
+  </Step>
+</Steps>
+
+## Automation
+
+### Auto-update on Plugin Update
+
+With lazy.nvim:
+
+```lua
+{
+  'nvim-treesitter/nvim-treesitter',
+  lazy = false,
+  build = ':TSUpdate'  -- Runs automatically on plugin update
+}
+```
+
+### Auto-install Missing Parsers
+
+```lua init.lua
+-- Install parsers for languages you commonly use
+vim.api.nvim_create_autocmd('VimEnter', {
+  callback = function()
+    local langs = { 'lua', 'python', 'rust', 'javascript' }
+    require('nvim-treesitter').install(langs)
+  end,
+})
+```
+
+## Next Steps
+
+- [Enable highlighting, folds, and indents](/guides/enabling-features)
+- [Add custom parsers not in the default list](/guides/custom-parsers)
+- [Write custom queries](/guides/custom-queries)

@@ -1,0 +1,121 @@
+---
+title: ':TSUninstall'
+description: Remove treesitter parsers and queries for specified languages
+---
+
+## Overview
+
+The `:TSUninstall` command deletes the parser and query files for one or more languages from the nvim-treesitter installation directory.
+
+## Syntax
+
+```vim
+:TSUninstall {language} [...]
+```
+
+<ParamField path="language" type="string" required>
+  One or more language names to uninstall. Can be:
+  - Specific language names (e.g., `rust`, `javascript`, `python`)
+  - `all` - Remove all installed parsers
+</ParamField>
+
+## Behavior
+
+- Removes both the parser binary and associated query files
+- Requires at least one language argument
+- Tab completion shows installed parsers
+- Operation displays a summary of removed parsers
+
+<Note>
+  This command only removes parsers installed via nvim-treesitter in its configured installation directory. Parsers from other sources on `runtimepath` are not affected.
+</Note>
+
+## Examples
+
+### Uninstall a single language
+
+```vim
+:TSUninstall rust
+```
+
+Removes the Rust parser and all associated query files.
+
+### Uninstall multiple languages
+
+```vim
+:TSUninstall javascript typescript tsx jsx
+```
+
+Removes parsers and queries for JavaScript, TypeScript, TSX, and JSX.
+
+### Uninstall all parsers
+
+```vim
+:TSUninstall all
+```
+
+Removes all parsers that were installed via nvim-treesitter.
+
+<Note type="warning">
+  Using `:TSUninstall all` will remove all parsers. This action cannot be undone, though parsers can be reinstalled with `:TSInstall`.
+</Note>
+
+## Use Cases
+
+### Free up disk space
+
+Remove parsers for languages you no longer work with:
+
+```vim
+:TSUninstall php ruby perl
+```
+
+### Clean reinstall
+
+Remove and reinstall a parser that may be corrupted:
+
+```vim
+:TSUninstall python
+:TSInstall python
+```
+
+### Manage parser versions
+
+Uninstall before switching to parsers from another source or version.
+
+## Checking Installed Parsers
+
+Before uninstalling, you can check what's installed:
+
+### Using Lua API
+
+```lua
+:lua print(vim.inspect(require('nvim-treesitter.config').get_installed()))
+```
+
+### Using health check
+
+```vim
+:checkhealth nvim-treesitter
+```
+
+## Related Commands
+
+- `:TSInstall` - Install new parsers
+- `:TSUpdate` - Update installed parsers
+- `:TSLog` - View uninstall operation logs
+
+## Source Implementation
+
+Implemented in `plugin/nvim-treesitter.lua:62-69`:
+
+```lua
+api.nvim_create_user_command('TSUninstall', function(args)
+  require('nvim-treesitter.install').uninstall(args.fargs, { summary = true })
+end, {
+  nargs = '+',
+  bar = true,
+  complete = complete_installed_parsers,
+  desc = 'Uninstall treesitter parsers',
+})
+```

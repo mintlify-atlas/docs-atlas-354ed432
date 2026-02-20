@@ -1,0 +1,539 @@
+---
+title: Custom Queries
+description: Learn how to write and customize tree-sitter queries for syntax highlighting, folding, and indentation
+---
+
+Queries are patterns that match tree-sitter nodes to enable features like highlighting, folding, and indentation. You can customize existing queries or create new ones.
+
+## Query Files Overview
+
+nvim-treesitter uses several types of query files:
+
+- **`highlights.scm`**: Syntax highlighting
+- **`injections.scm`**: Multi-language injection (e.g., JS in HTML)
+- **`folds.scm`**: Code folding regions
+- **`indents.scm`**: Indentation rules
+- **`locals.scm`**: Definitions and references (backward compatibility)
+
+<Note>
+  For a language to support a feature, both the parser and the corresponding query file must exist.
+</Note>
+
+## Where to Place Custom Queries
+
+Custom queries go in your Neovim config under `queries/<language>/`:
+
+```
+~/.config/nvim/
+└── queries/
+    ├── lua/
+    │   ├── highlights.scm
+    │   └── indents.scm
+    ├── python/
+    │   └── highlights.scm
+    └── rust/
+        └── folds.scm
+```
+
+<Warning>
+  Queries in your config directory **replace** default queries unless you use the `; extends` modeline.
+</Warning>
+
+## Extending vs Replacing Queries
+
+### Extending Default Queries
+
+To add to existing queries without replacing them:
+
+```scm ~/.config/nvim/queries/lua/highlights.scm
+; extends
+
+; Add custom highlight for a specific pattern
+(function_call
+  name: (identifier) @custom.function
+  (#eq? @custom.function "mySpecialFunction"))
+```
+
+The `; extends` modeline tells Neovim to merge your queries with the defaults.
+
+### Replacing Default Queries
+
+To completely replace default queries, omit `; extends`:
+
+```scm ~/.config/nvim/queries/python/highlights.scm
+; This file replaces the default highlights
+
+(function_definition
+  name: (identifier) @function)
+
+(string) @string
+```
+
+<Note>
+  Most of the time you want to **extend**, not replace.
+</Note>
+
+## Writing Highlight Queries
+
+Highlight queries assign tree-sitter nodes to capture groups that map to highlight groups.
+
+### Basic Syntax
+
+```scm
+; Match a specific node type
+(function_definition) @function
+
+; Match specific text
+"return" @keyword.return
+
+; Match multiple alternatives
+[
+  "if"
+  "else"
+  "elif"
+] @keyword.conditional
+```
+
+### Using Fields
+
+```scm
+; Capture specific fields of a node
+(function_definition
+  name: (identifier) @function.name
+  parameters: (parameters) @function.parameters)
+```
+
+### Common Capture Groups
+
+Here are the most commonly used captures:
+
+<CodeGroup>
+```scm Keywords
+@keyword                   ; General keywords
+@keyword.function          ; def, function
+@keyword.return            ; return, yield  
+@keyword.conditional       ; if, else, elif
+@keyword.repeat            ; for, while
+@keyword.import            ; import, require
+```
+
+```scm Literals
+@string                    ; String literals
+@string.documentation      ; Docstrings
+@string.escape             ; Escape sequences
+@number                    ; Numeric literals
+@boolean                   ; true, false
+@character                 ; Character literals
+```
+
+```scm Functions & Variables
+@function                  ; Function definitions
+@function.call             ; Function calls
+@function.builtin          ; Built-in functions
+@variable                  ; Variable names
+@variable.builtin          ; Built-in variables
+@variable.parameter        ; Function parameters
+@constant                  ; Constants
+```
+
+```scm Types & Comments
+@type                      ; Type names
+@type.builtin              ; Built-in types
+@comment                   ; Comments
+@comment.documentation     ; Doc comments
+@comment.error             ; ERROR, FIXME
+@comment.warning           ; WARNING, HACK
+@comment.todo              ; TODO, WIP
+```
+</CodeGroup>
+
+### Using Predicates
+
+Predicates filter matches based on conditions:
+
+```scm
+; Match exact text
+(identifier) @variable.builtin
+  (#eq? @variable.builtin "self")
+
+; Match one of several values
+(identifier) @constant.builtin
+  (#any-of? @constant.builtin "None" "True" "False")
+
+; Match a Lua pattern
+(identifier) @constant
+  (#lua-match? @constant "^[A-Z_]+$")
+
+; Match a Vim regex  
+(identifier) @constant
+  (#match? @constant "^[A-Z_]+$")
+```
+
+<Note>
+  For performance, prefer `#eq?` over `#any-of?` over `#lua-match?` over `#match?`.
+</Note>
+
+### Setting Priority
+
+Control highlight precedence with priority directives:
+
+```scm
+; Default priority is 100
+(comment) @comment
+
+; Higher priority takes precedence
+(comment
+  content: (tag) @comment.todo
+  (#eq? @comment.todo "TODO"))
+  (#set! priority 110)
+```
+
+<Warning>
+  Only set priorities between 90 and 120 to avoid conflicts with other highlight sources.
+</Warning>
+
+## Writing Fold Queries
+
+Fold queries mark regions that can be folded:
+
+```scm ~/.config/nvim/queries/lua/folds.scm
+; extends
+
+; Fold function bodies
+(function_definition) @fold
+
+; Fold table constructors
+(table_constructor) @fold
+
+; Fold multi-line comments
+(comment) @fold
+  (#lua-match? @fold "^%-%-%-")
+```
+
+### Good Fold Candidates
+
+- Function/method definitions
+- Class/struct definitions
+- Blocks (if, while, for)
+- Array/object literals
+- Multi-line comments
+- Import statement groups
+
+### Bad Fold Candidates
+
+- Single-line expressions
+- Variable assignments
+- Chain expressions (e.g., `obj.prop.prop`)
+
+## Writing Indent Queries
+
+<Warning>
+  Indentation queries are experimental and may change.
+</Warning>
+
+Indent queries control automatic indentation:
+
+```scm ~/.config/nvim/queries/python/indents.scm
+; extends
+
+; Indent inside function bodies
+(function_definition
+  body: (block) @indent.begin)
+
+; Dedent at closing keywords
+["end" "else" "elif"] @indent.branch
+
+; Maintain indentation for comments
+(comment) @indent.auto
+```
+
+### Indent Captures
+
+<CodeGroup>
+```scm Begin & End
+@indent.begin     ; Start indented region
+@indent.end       ; End indented region (next line dedents)
+@indent.branch    ; Dedent at this node (e.g., else, elif)
+```
+
+```scm Control
+@indent.dedent    ; Dedent on next line
+@indent.ignore    ; Don't indent this node
+@indent.zero      ; Set indentation to 0
+@indent.auto      ; Copy previous line's indent
+```
+
+```scm Alignment
+@indent.align     ; Align within delimiters
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")")
+```
+</CodeGroup>
+
+### Example: Function Indentation
+
+```scm
+; Indent function bodies
+(function_definition) @indent.begin
+
+; Dedent at "end" keyword
+"end" @indent.end
+
+; Align function arguments
+(parameters) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")")
+```
+
+## Writing Injection Queries
+
+Injection queries enable parsing of embedded languages:
+
+```scm ~/.config/nvim/queries/html/injections.scm
+; extends
+
+; JavaScript in <script> tags
+(script_element
+  (raw_text) @injection.content
+  (#set! injection.language "javascript"))
+
+; CSS in <style> tags
+(style_element
+  (raw_text) @injection.content
+  (#set! injection.language "css"))
+```
+
+### Dynamic Language Detection
+
+```scm
+; Detect language from attribute
+(script_element
+  (start_tag
+    (attribute
+      (attribute_name) @_attr
+      (quoted_attribute_value (attribute_value) @injection.language)
+      (#eq? @_attr "type")))
+  (raw_text) @injection.content)
+```
+
+This allows `<script type="module">` to be highlighted as JavaScript.
+
+### Filename-based Injection
+
+```scm
+; Inject based on filepath
+(import_statement
+  path: (string_content) @injection.filename
+  content: (_) @injection.content)
+```
+
+## Testing Your Queries
+
+<Steps>
+  <Step title="Use :InspectTree">
+    Open a file and run `:InspectTree` to see the parse tree. Hover over nodes to see corresponding text.
+  </Step>
+  
+  <Step title="Use :EditQuery">
+    Run `:EditQuery` to open an interactive query editor. Write patterns and see matches in real-time.
+  </Step>
+  
+  <Step title="Use :Inspect">
+    Position cursor and run `:Inspect` to see what highlight groups are applied at that location.
+  </Step>
+</Steps>
+
+## Query Development Tools
+
+### tree-sitter CLI
+
+```bash
+# Parse a file and show the tree
+tree-sitter parse file.lua
+
+# Test a query
+tree-sitter query queries/lua/highlights.scm file.lua
+```
+
+### ts_query_ls
+
+[ts_query_ls](https://github.com/ribru17/ts_query_ls) is a language server for query files:
+
+- Validation
+- Autocompletion  
+- Formatting
+- Error diagnostics
+
+Install and configure it in your Neovim LSP config.
+
+## Advanced Techniques
+
+### Inheriting from Other Languages
+
+TypeScript extends JavaScript:
+
+```scm ~/.config/nvim/queries/typescript/highlights.scm
+; inherits: javascript
+
+; Add TypeScript-specific patterns
+(type_annotation) @type
+(interface_declaration) @type.definition
+```
+
+### Optional Inheritance
+
+Use parentheses for optional inheritance:
+
+```scm
+; inherits: javascript,(jsx)
+```
+
+This inherits JavaScript, and optionally JSX if available.
+
+### Format Preservation
+
+```scm
+; format-ignore
+(complex_pattern
+  (nested
+    (very_long_pattern) @capture
+    (#some-predicate? @capture)))
+```
+
+The `; format-ignore` directive prevents auto-formatting of the following pattern.
+
+### Concealing Text
+
+```scm
+; Conceal lambda keyword
+"lambda" @conceal
+  (#set! conceal "λ")
+
+; Conceal part of a capture
+(string
+  "\"" @string.delimiter
+    (#offset! @string.delimiter 0 1 0 0)
+    (#set! conceal ""))
+```
+
+### Spell Checking
+
+```scm
+; Enable spell checking in comments
+(comment) @spell
+
+; Disable in code strings
+(string) @nospell
+```
+
+## Real-World Examples
+
+### Example 1: Custom Python Highlights
+
+```scm ~/.config/nvim/queries/python/highlights.scm
+; extends
+
+; Highlight self parameter specially
+(parameters
+  (identifier) @variable.builtin
+  (#eq? @variable.builtin "self"))
+
+; Highlight type hints
+(type_annotation
+  (type) @type)
+
+; Highlight decorators
+(decorator) @attribute
+
+; Highlight f-string expressions
+(interpolation) @string.escape
+```
+
+### Example 2: Lua Function Folds
+
+```scm ~/.config/nvim/queries/lua/folds.scm
+; extends
+
+; Fold function definitions
+[
+  (function_definition)
+  (function_declaration)
+] @fold
+
+; Fold table constructors with multiple lines
+(table_constructor) @fold
+
+; Fold do...end blocks
+(do_statement) @fold
+
+; Fold if statements
+(if_statement) @fold
+```
+
+### Example 3: Markdown Injections
+
+```scm ~/.config/nvim/queries/markdown/injections.scm
+; extends
+
+; Inject language based on fence info string
+(fenced_code_block
+  (info_string
+    (language) @injection.language)
+  (code_fence_content) @injection.content)
+
+; Handle inline code as plain text
+(inline
+  (code_span) @none)
+```
+
+## Troubleshooting
+
+### Query Not Loading
+
+1. Check file location: `~/.config/nvim/queries/<language>/`
+2. Verify filename: `highlights.scm`, `folds.scm`, etc.
+3. Check for syntax errors: `:messages`
+4. Ensure parser is installed: `:TSInstallInfo`
+
+### Invalid Pattern Errors
+
+```
+Invalid pattern at line 5
+```
+
+1. Use `:InspectTree` to see valid node names
+2. Check field names in the parser grammar
+3. Test with `:EditQuery`
+
+### Highlights Not Applying
+
+1. Check priority with `:Inspect`
+2. Verify capture group names are valid
+3. Test predicates match correctly
+4. Ensure colorscheme defines the highlight group
+
+### Performance Issues
+
+<Warning>
+  Complex queries with many predicates can slow down highlighting.
+</Warning>
+
+- Use `#eq?` instead of `#match?` when possible
+- Limit the scope of patterns
+- Avoid overlapping captures
+- Profile with `:profile start profile.log` and `:profile func *treesitter*`
+
+## Query Syntax Reference
+
+For complete query syntax documentation, see:
+
+- [Tree-sitter query documentation](https://tree-sitter.github.io/tree-sitter/using-parsers#pattern-matching-with-queries)
+- [Neovim treesitter help](https://neovim.io/doc/user/treesitter.html)
+- `:help treesitter-query`
+- `:help treesitter-highlight`
+
+## Next Steps
+
+- [Add custom parsers](/guides/custom-parsers)
+- [Learn about parser management](/guides/parser-management)
+- [Explore the tree-sitter playground](https://tree-sitter.github.io/tree-sitter/playground)

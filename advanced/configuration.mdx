@@ -1,0 +1,265 @@
+---
+title: Advanced Configuration
+description: Customize installation directories and advanced setup options for nvim-treesitter
+---
+
+This guide covers advanced configuration options for nvim-treesitter, including custom installation directories and runtime path management.
+
+## Configuration Options
+
+The `setup()` function accepts a configuration table to customize nvim-treesitter behavior. While most users can use the defaults, advanced configurations may require customization.
+
+<Tip>
+  You only need to call `setup()` if you want to override default settings. nvim-treesitter works out-of-the-box without any configuration.
+</Tip>
+
+### Basic Setup
+
+```lua
+require('nvim-treesitter').setup({
+  -- Configuration options go here
+})
+```
+
+## Custom Installation Directory
+
+By default, nvim-treesitter installs parsers and queries to `stdpath('data')/site/`. You can customize this location using the `install_dir` option.
+
+### Setting a Custom Directory
+
+```lua
+require('nvim-treesitter').setup({
+  install_dir = "/path/to/custom/location",
+})
+```
+
+**Implementation Details** (lua/nvim-treesitter/config.lua:10-20):
+- The `install_dir` path is automatically normalized using `vim.fs.normalize()`
+- The directory is prepended to your `runtimepath` automatically
+- Parent directories are created if they don't exist (with permissions `0755`)
+
+### Directory Structure
+
+When you set a custom `install_dir`, nvim-treesitter creates the following subdirectories:
+
+```
+install_dir/
+├── parser/           # Compiled parser .so files
+├── parser-info/      # Parser revision tracking
+└── queries/          # Language query files (highlights, folds, etc.)
+```
+
+### Use Cases for Custom Directories
+
+<AccordionGroup>
+  <Accordion title="Shared Installation Across Multiple Neovim Configs">
+    If you maintain multiple Neovim configurations, you can point them all to a shared parser directory:
+
+    ```lua
+    require('nvim-treesitter').setup({
+      install_dir = vim.fn.expand("~/.local/share/nvim-treesitter"),
+    })
+    ```
+
+    This avoids duplicating parser installations and saves disk space.
+  </Accordion>
+
+  <Accordion title="Portable Installation">
+    For portable Neovim setups, you can use a relative path:
+
+    ```lua
+    local config_dir = vim.fn.stdpath('config')
+    require('nvim-treesitter').setup({
+      install_dir = config_dir .. "/treesitter",
+    })
+    ```
+  </Accordion>
+
+  <Accordion title="Read-Only System Installation">
+    For system-wide installations where users don't have write permissions:
+
+    ```lua
+    -- Admin installs to: /usr/local/share/nvim-treesitter
+    require('nvim-treesitter').setup({
+      install_dir = "/usr/local/share/nvim-treesitter",
+    })
+    ```
+
+    Users will need read access to this directory.
+  </Accordion>
+</AccordionGroup>
+
+## Installation Subdirectories
+
+The `get_install_dir()` function (lua/nvim-treesitter/config.lua:29-40) manages subdirectory creation:
+
+```lua
+-- Get the parser installation directory
+local parser_dir = require('nvim-treesitter.config').get_install_dir('parser')
+
+-- Get the queries installation directory
+local query_dir = require('nvim-treesitter.config').get_install_dir('queries')
+
+-- Get the parser-info directory (stores revision data)
+local info_dir = require('nvim-treesitter.config').get_install_dir('parser-info')
+```
+
+<Tip>
+  Directories are created automatically with appropriate permissions when accessed. You don't need to manually create them.
+</Tip>
+
+## Runtime Path Management
+
+When you configure a custom `install_dir`, nvim-treesitter automatically prepends it to your `runtimepath`:
+
+```lua
+vim.o.rtp = user_data.install_dir .. ',' .. vim.o.rtp
+```
+
+This ensures that:
+- Neovim can find installed parsers in `parser/` subdirectory
+- Query files in `queries/` are available for treesitter features
+- The installation is immediately usable without manual runtimepath modifications
+
+### Verifying Installation Path
+
+You can verify your installation directory is correctly set up:
+
+```lua
+-- Check the configured install directory
+local config = require('nvim-treesitter.config')
+local install_dir = config.get_install_dir('')
+print("Install directory: " .. install_dir)
+
+-- Verify it's in runtimepath
+local in_rtp = vim.iter(vim.api.nvim_list_runtime_paths()):any(function(p)
+  return install_dir == vim.fs.normalize(p) .. '/'
+end)
+print("In runtimepath: " .. tostring(in_rtp))
+```
+
+Or use the built-in health check:
+
+```vim
+:checkhealth nvim-treesitter
+```
+
+## Parser Tiers
+
+nvim-treesitter organizes parsers into maintenance tiers (lua/nvim-treesitter/config.lua:3):
+
+- **Tier 1: `stable`** - Well-maintained, production-ready parsers
+- **Tier 2: `unstable`** - Active development, may have issues
+- **Tier 3: `unmaintained`** - No active maintenance
+- **Tier 4: `unsupported`** - Not recommended for use
+
+You can install by tier:
+
+```lua
+-- Install all stable parsers
+require('nvim-treesitter').install('stable')
+
+-- Install all unstable parsers
+require('nvim-treesitter').install('unstable')
+```
+
+<Warning>
+  Installing `all` parsers (including unsupported ones) is **not recommended** as it may include broken or incompatible parsers.
+</Warning>
+
+## Advanced API Usage
+
+### Getting Installed Languages
+
+```lua
+local config = require('nvim-treesitter.config')
+
+-- Get all installed languages
+local all_installed = config.get_installed()
+
+-- Get only languages with parsers installed
+local with_parsers = config.get_installed('parsers')
+
+-- Get only languages with queries installed
+local with_queries = config.get_installed('queries')
+```
+
+### Getting Available Languages
+
+```lua
+-- Get all available languages
+local all_available = config.get_available()
+
+-- Get only stable (tier 1) languages
+local stable_only = config.get_available(1)
+
+-- Get only unstable (tier 2) languages
+local unstable_only = config.get_available(2)
+```
+
+### Language Normalization
+
+The `norm_languages()` function (lua/nvim-treesitter/config.lua:101-178) processes language lists with special handling:
+
+```lua
+local config = require('nvim-treesitter.config')
+
+-- Expand 'all' to full language list
+local languages = config.norm_languages('all')
+
+-- Skip already installed languages
+local to_install = config.norm_languages(
+  { 'rust', 'lua', 'python' },
+  { installed = true }
+)
+
+-- Skip missing languages (only process installed ones)
+local to_update = config.norm_languages(
+  'all',
+  { missing = true }
+)
+
+-- Skip unsupported languages (tier 4)
+local safe_list = config.norm_languages(
+  languages,
+  { unsupported = true }
+)
+```
+
+## Configuration Best Practices
+
+<Tip>
+  **Call setup() before any installation operations** to ensure custom directories are used from the start.
+</Tip>
+
+**Recommended pattern:**
+
+```lua
+-- 1. Configure first
+require('nvim-treesitter').setup({
+  install_dir = "/your/custom/path",
+})
+
+-- 2. Then install parsers
+require('nvim-treesitter').install({ 'rust', 'lua', 'python' })
+```
+
+**Bootstrap script example:**
+
+```lua
+local ts = require('nvim-treesitter')
+
+-- Configure
+ts.setup({
+  install_dir = vim.fn.stdpath('data') .. '/treesitter',
+})
+
+-- Install synchronously (useful for bootstrap)
+ts.install({ 'lua', 'vim', 'vimdoc' }):wait(300000) -- 5 minute timeout
+```
+
+## See Also
+
+- [Troubleshooting](/advanced/troubleshooting) - Common issues with custom installations
+- [Performance](/advanced/performance) - Optimize installation operations
+- [API Reference](/api-reference) - Complete API documentation

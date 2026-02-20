@@ -1,0 +1,463 @@
+---
+title: Troubleshooting
+description: Common issues, solutions, and debugging techniques for nvim-treesitter
+---
+
+This guide covers common issues you might encounter with nvim-treesitter and how to resolve them.
+
+## Health Check
+
+The first step in troubleshooting should always be running the health check:
+
+```vim
+:checkhealth nvim-treesitter
+```
+
+The health check validates:
+- Neovim version compatibility (requires 0.11+)
+- Tree-sitter ABI version (requires ABI >= 13)
+- Required external tools (`tree-sitter`, `curl`, `tar`)
+- Installation directory permissions
+- Installed parsers and their query files
+
+<Tip>
+  Run `:checkhealth nvim-treesitter` after any configuration changes or installation issues to verify your setup.
+</Tip>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Parser not found or fails to load">
+    **Symptoms:**
+    - Error: `Parser not available for language "xxx"`
+    - Treesitter features not working for a specific language
+
+    **Solutions:**
+
+    1. **Verify the parser is installed:**
+       ```lua
+       local installed = require('nvim-treesitter.config').get_installed()
+       print(vim.inspect(installed))
+       ```
+
+    2. **Check installation directory is in runtimepath:**
+       ```vim
+       :checkhealth nvim-treesitter
+       ```
+       Look for the "Install directory for parsers and queries" section.
+
+    3. **Manually check parser file exists:**
+       ```lua
+       local config = require('nvim-treesitter.config')
+       local parser_dir = config.get_install_dir('parser')
+       local parser_file = parser_dir .. '/rust.so'
+       print(vim.fn.filereadable(parser_file))
+       ```
+
+    4. **Reinstall the parser:**
+       ```vim
+       :TSInstall! rust
+       ```
+       The `!` forces reinstallation even if the parser exists.
+  </Accordion>
+
+  <Accordion title="Installation directory not writable">
+    **Symptoms:**
+    - Error during `:TSInstall`: `Could not create directory`
+    - Health check reports: "is not writable"
+
+    **Solutions:**
+
+    1. **Check directory permissions:**
+       ```lua
+       local install_dir = require('nvim-treesitter.config').get_install_dir('')
+       print("Directory: " .. install_dir)
+       print("Writable: " .. tostring(vim.uv.fs_access(install_dir, 'w')))
+       ```
+
+    2. **Set a custom writable directory:**
+       ```lua
+       require('nvim-treesitter').setup({
+         install_dir = vim.fn.expand("~/.local/share/nvim-treesitter"),
+       })
+       ```
+
+    3. **Fix permissions (Linux/macOS):**
+       ```bash
+       chmod -R u+w ~/.local/share/nvim/site/
+       ```
+  </Accordion>
+
+  <Accordion title="Tree-sitter CLI not found">
+    **Symptoms:**
+    - Error during `:TSInstall`: `tree-sitter-cli not found`
+    - Health check shows "tree-sitter-cli not found"
+
+    **Solutions:**
+
+    1. **Install tree-sitter CLI** (minimum version 0.26.1):
+
+       **npm:**
+       ```bash
+       npm install -g tree-sitter-cli
+       ```
+
+       **cargo:**
+       ```bash
+       cargo install tree-sitter-cli
+       ```
+
+       **Homebrew (macOS):**
+       ```bash
+       brew install tree-sitter
+       ```
+
+    2. **Verify installation:**
+       ```bash
+       tree-sitter --version
+       ```
+
+    3. **Ensure it's in PATH:**
+       ```lua
+       print(vim.fn.exepath('tree-sitter'))
+       ```
+  </Accordion>
+
+  <Accordion title="ABI version mismatch">
+    **Symptoms:**
+    - Error: `Parser ABI version mismatch`
+    - Health check shows ABI version incompatibility
+    - Parser loads but crashes or behaves incorrectly
+
+    **Solutions:**
+
+    1. **Check your Neovim's ABI version:**
+       ```lua
+       print("ABI version: " .. vim.treesitter.language_version)
+       ```
+       nvim-treesitter requires ABI >= 13 (lua/nvim-treesitter/health.lua:9)
+
+    2. **Update Neovim** to version 0.11 or later:
+       ```bash
+       # Check current version
+       nvim --version
+       ```
+
+    3. **Regenerate parser from grammar** if parser.c is outdated:
+       ```vim
+       :TSInstallFromGrammar rust
+       ```
+       This regenerates parser.c with the correct ABI version.
+
+    4. **Update all parsers** to match current ABI:
+       ```vim
+       :TSUpdate
+       ```
+  </Accordion>
+
+  <Accordion title="Query file errors">
+    **Symptoms:**
+    - Error: `Invalid node type` or `Invalid field name`
+    - Health check shows query errors for specific languages
+    - Syntax highlighting partially works or breaks
+
+    **Solutions:**
+
+    1. **Check which query files have errors:**
+       ```vim
+       :checkhealth nvim-treesitter
+       ```
+       Look for the "The following errors have been detected" section.
+
+    2. **Identify problematic query files:**
+       ```lua
+       local lang = 'rust'
+       local query_type = 'highlights'
+       local files = vim.treesitter.query.get_files(lang, query_type)
+       for _, file in ipairs(files) do
+         print(file)
+       end
+       ```
+
+    3. **Update parser and queries together:**
+       ```vim
+       :TSUpdate rust
+       ```
+
+    4. **Clear cached queries** (if queries are modified):
+       ```lua
+       vim.treesitter.query.invalidate_cache()
+       ```
+
+    5. **Check for outdated custom queries** if you have local overrides.
+  </Accordion>
+
+  <Accordion title="Curl or tar missing">
+    **Symptoms:**
+    - Error during `:TSInstall`: `curl not found` or `tar not found`
+    - Installation fails to download or extract parsers
+
+    **Solutions:**
+
+    1. **Install required tools:**
+
+       **Linux (Debian/Ubuntu):**
+       ```bash
+       sudo apt install curl tar
+       ```
+
+       **Linux (Fedora/RHEL):**
+       ```bash
+       sudo dnf install curl tar
+       ```
+
+       **macOS:**
+       ```bash
+       # Usually pre-installed, or use Homebrew:
+       brew install curl
+       ```
+
+       **Windows:**
+       - Install [Git for Windows](https://gitforwindows.org/) which includes curl and tar
+       - Or use [Windows Subsystem for Linux (WSL)](https://docs.microsoft.com/en-us/windows/wsl/)
+
+    2. **Verify tools are accessible:**
+       ```lua
+       print(vim.fn.exepath('curl'))
+       print(vim.fn.exepath('tar'))
+       ```
+  </Accordion>
+
+  <Accordion title="Installation timeout">
+    **Symptoms:**
+    - Parser installation hangs or times out
+    - Error: `timeout` after 60 seconds
+
+    **Context:**
+    The installation timeout is set to 60000ms (60 seconds) per parser (lua/nvim-treesitter/install.lua:61).
+
+    **Solutions:**
+
+    1. **Check network connectivity:**
+       ```bash
+       curl -I https://github.com
+       ```
+
+    2. **Try installing parsers one at a time:**
+       ```vim
+       :TSInstall rust
+       :TSInstall lua
+       ```
+
+    3. **Use synchronous installation with longer timeout:**
+       ```lua
+       require('nvim-treesitter').install('rust'):wait(300000) -- 5 minutes
+       ```
+
+    4. **Check if another installation is running:**
+       The installer prevents concurrent installations of the same language.
+  </Accordion>
+
+  <Accordion title="Dependency language missing">
+    **Symptoms:**
+    - Query errors for a language that has dependencies
+    - Example: `angular` requires `html` and `html_tags`
+
+    **Solution:**
+
+    Dependencies are automatically installed by default. If you see this error:
+
+    1. **Manually install dependencies:**
+       ```lua
+       local parsers = require('nvim-treesitter.parsers')
+       local deps = parsers['angular'].requires
+       require('nvim-treesitter').install(deps)
+       ```
+
+    2. **Check dependency information:**
+       ```lua
+       local parsers = require('nvim-treesitter.parsers')
+       print(vim.inspect(parsers['angular']))
+       ```
+
+    3. **Verify all dependencies are installed:**
+       ```lua
+       local installed = require('nvim-treesitter.config').get_installed()
+       print(vim.inspect(installed))
+       ```
+  </Accordion>
+
+  <Accordion title="Parsers not updating">
+    **Symptoms:**
+    - `:TSUpdate` reports "All parsers are up-to-date" but issues persist
+    - Old parser behavior despite update command
+
+    **Solutions:**
+
+    1. **Check if update is actually needed:**
+       ```lua
+       local config = require('nvim-treesitter.config')
+       local parsers = require('nvim-treesitter.parsers')
+       
+       local lang = 'rust'
+       local current = config.get_installed_revision(lang)
+       local latest = parsers[lang].install_info.revision
+       
+       print("Current: " .. (current or 'none'))
+       print("Latest: " .. (latest or 'none'))
+       ```
+
+    2. **Force reinstall:**
+       ```vim
+       :TSInstall! rust
+       ```
+
+    3. **Clear parser cache and reinstall:**
+       ```lua
+       -- Remove parser file
+       local config = require('nvim-treesitter.config')
+       local parser_file = config.get_install_dir('parser') .. '/rust.so'
+       vim.fn.delete(parser_file)
+       
+       -- Reinstall
+       require('nvim-treesitter').install('rust')
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## Debugging Installation Issues
+
+### View Installation Logs
+
+All installation operations are logged. View the logs with:
+
+```vim
+:TSLog
+```
+
+This shows detailed output from previous install, update, or uninstall operations, including:
+- Download progress
+- Compilation output
+- Error messages
+- File operations
+
+### Manual Installation Verification
+
+To manually verify an installation:
+
+```lua
+local config = require('nvim-treesitter.config')
+local lang = 'rust'
+
+-- 1. Check parser file exists
+local parser_dir = config.get_install_dir('parser')
+local parser_file = parser_dir .. '/' .. lang .. '.so'
+print("Parser exists: " .. tostring(vim.fn.filereadable(parser_file) == 1))
+
+-- 2. Check queries directory exists
+local query_dir = config.get_install_dir('queries') .. '/' .. lang
+print("Queries exist: " .. tostring(vim.fn.isdirectory(query_dir) == 1))
+
+-- 3. Try loading the parser
+local ok, parser = pcall(vim.treesitter.language.add, lang)
+print("Parser loads: " .. tostring(ok))
+
+-- 4. Check query files
+local query_groups = { 'highlights', 'locals', 'folds', 'indents', 'injections' }
+for _, group in ipairs(query_groups) do
+  local ok, err = pcall(vim.treesitter.query.get, lang, group)
+  print(group .. ": " .. (ok and "OK" or "Error"))
+end
+```
+
+## Platform-Specific Issues
+
+### Windows
+
+<Warning>
+  On Windows, parsers may be locked when in use. The installer uses a special renaming strategy to handle this (lua/nvim-treesitter/install.lua:302-304).
+</Warning>
+
+**Common Windows issues:**
+
+1. **Parser file is locked:**
+   - Restart Neovim before updating parsers
+   - Close all buffers using the parser before updating
+
+2. **Path issues with spaces:**
+   - Ensure `install_dir` doesn't contain spaces
+   - Or use short path names (8.3 format)
+
+3. **Git Bash paths:**
+   - Ensure Git Bash is in PATH
+   - Use forward slashes in `install_dir` configuration
+
+### macOS
+
+**Common macOS issues:**
+
+1. **Xcode Command Line Tools required:**
+   ```bash
+   xcode-select --install
+   ```
+
+2. **Permission issues with Homebrew directories:**
+   ```bash
+   # Fix Homebrew permissions
+   sudo chown -R $(whoami) $(brew --prefix)/*
+   ```
+
+### Linux
+
+**Common Linux issues:**
+
+1. **Missing build tools:**
+   ```bash
+   # Debian/Ubuntu
+   sudo apt install build-essential
+   
+   # Fedora/RHEL
+   sudo dnf groupinstall "Development Tools"
+   ```
+
+2. **SELinux issues:**
+   ```bash
+   # Check SELinux status
+   sestatus
+   
+   # Temporarily disable if needed
+   sudo setenforce 0
+   ```
+
+## Getting Help
+
+If you've tried the solutions above and still have issues:
+
+1. **Run the health check** and save the output:
+   ```vim
+   :checkhealth nvim-treesitter > ~/nvim-treesitter-health.txt
+   ```
+
+2. **Check the installation logs:**
+   ```vim
+   :TSLog
+   ```
+
+3. **Gather system information:**
+   ```lua
+   print(vim.inspect(vim.uv.os_uname()))
+   print("Neovim version: " .. tostring(vim.version()))
+   print("ABI version: " .. vim.treesitter.language_version)
+   ```
+
+4. **Report the issue** at [nvim-treesitter GitHub](https://github.com/nvim-treesitter/nvim-treesitter/issues) with:
+   - Health check output
+   - Installation logs
+   - System information
+   - Steps to reproduce
+
+## See Also
+
+- [Configuration](/advanced/configuration) - Custom installation directory setup
+- [Performance](/advanced/performance) - Optimize installation performance
+- [Commands](/commands) - Installation command reference

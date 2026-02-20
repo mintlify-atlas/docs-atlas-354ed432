@@ -1,0 +1,335 @@
+---
+title: Injection Queries
+description: Language injection queries for multi-language documents using Tree-sitter in Neovim
+---
+
+Injection queries specify nodes whose content should be parsed as a different language, enabling syntax highlighting and other features for multi-language documents. This feature is implemented in Neovim and documented at [`:h treesitter-language-injections`](https://neovim.io/doc/user/treesitter.html#treesitter-language-injections).
+
+## Overview
+
+Language injections allow Tree-sitter to:
+- Highlight SQL queries inside Python strings
+- Parse JavaScript code within HTML `<script>` tags
+- Highlight regex patterns in language-specific string literals
+- Enable proper syntax in template languages
+- Support embedded languages in comments (like code blocks in documentation)
+
+<Note>
+No setup is needed to enable language injections. They work automatically when the appropriate queries are present.
+</Note>
+
+## Valid Captures
+
+<ParamField path="@injection.content" type="capture">
+  Region for the injected language. This marks the node(s) whose content will be parsed with the injected language.
+</ParamField>
+
+<ParamField path="@injection.language" type="capture">
+  Dynamic detection of the injection language. The text of the captured node describes the language name.
+</ParamField>
+
+<ParamField path="@injection.filename" type="capture">
+  Indicates that the captured node's text may contain a filename. The corresponding filetype is looked up via `vim.filetype.match()` and used as the language name.
+</ParamField>
+
+## Basic Patterns
+
+### Static Language Injection
+
+When you know the language ahead of time, use the `#set!` directive:
+
+```query
+(call
+  function: (attribute
+    object: (identifier) @_re)
+  arguments: (argument_list
+    (string
+      (string_content) @injection.content))
+  (#eq? @_re "re")
+  (#set! injection.language "regex"))
+```
+
+This injects regex highlighting into Python's `re` module function calls.
+
+### Dynamic Language Injection
+
+When the language is specified in the source code, use `@injection.language`:
+
+```query
+(fenced_code_block
+  (info_string
+    (language) @injection.language)
+  (code_fence_content) @injection.content)
+```
+
+This reads the language from a code fence info string in Markdown.
+
+### Filename-based Injection
+
+When the language should be determined by filename:
+
+```query
+(include_statement
+  path: (string_content) @injection.filename)
+```
+
+## Advanced Techniques
+
+### Combined Injection
+
+Combine multiple nodes into a single injection using the `#set! injection.combined` directive:
+
+```query
+((comment) @injection.content
+  (#set! injection.language "comment")
+  (#set! injection.combined))
+```
+
+### Self Injection
+
+Sometimes you need to re-parse content with the same language:
+
+```query
+(template_string) @injection.content
+(#set! injection.language "javascript")
+(#set! injection.include-children)
+```
+
+### Injection with Include Children
+
+By default, only the captured node's text is injected. To include child nodes:
+
+```query
+(interpolation) @injection.content
+(#set! injection.language "javascript")
+(#set! injection.include-children)
+```
+
+<Warning>
+When writing injection queries, try to ensure that each captured node is only matched by a single pattern. Overlapping patterns can cause unexpected behavior.
+</Warning>
+
+## Real-World Examples
+
+### Python Regex Injection
+
+```query
+; Python re module calls
+(call
+  function: (attribute
+    object: (identifier) @_re)
+  arguments: (argument_list
+    (string
+      (string_content) @injection.content))
+  (#eq? @_re "re")
+  (#set! injection.language "regex"))
+
+; Also support concatenated strings
+(call
+  function: (attribute
+    object: (identifier) @_re)
+  arguments: (argument_list
+    (concatenated_string
+      [
+        (string
+          (string_content) @injection.content)
+        (comment)
+      ]+))
+  (#eq? @_re "re")
+  (#set! injection.language "regex"))
+```
+
+### Python Printf-style Formatting
+
+```query
+((binary_operator
+  left: (string
+    (string_content) @injection.content)
+  operator: "%")
+  (#set! injection.language "printf"))
+```
+
+### JavaScript Template Literals
+
+```query
+; SQL in tagged templates
+((call_expression
+  function: (identifier) @_name
+  arguments: (template_string) @injection.content)
+  (#eq? @_name "sql")
+  (#set! injection.language "sql")
+  (#offset! @injection.content 0 1 0 -1))
+
+; GraphQL in tagged templates  
+((call_expression
+  function: (identifier) @_name
+  arguments: (template_string) @injection.content)
+  (#eq? @_name "gql")
+  (#set! injection.language "graphql")
+  (#offset! @injection.content 0 1 0 -1))
+```
+
+### HTML Script Tags
+
+```query
+(script_element
+  (start_tag
+    (tag_name) @_tag)
+  (raw_text) @injection.content
+  (#eq? @_tag "script")
+  (#set! injection.language "javascript"))
+
+(style_element
+  (start_tag
+    (tag_name) @_tag)
+  (raw_text) @injection.content
+  (#eq? @_tag "style")
+  (#set! injection.language "css"))
+```
+
+### Markdown Code Blocks
+
+```query
+(fenced_code_block
+  (info_string
+    (language) @injection.language)
+  (code_fence_content) @injection.content)
+
+; Fallback for code blocks without language
+((fenced_code_block
+  (code_fence_content) @injection.content)
+  (#set! injection.language "text"))
+```
+
+### Comment Injection
+
+```query
+; Enable comment-specific features in all comments
+((comment) @injection.content
+  (#set! injection.language "comment"))
+```
+
+### Lua Heredocs
+
+```query
+(function_call
+  name: (identifier) @_name
+  arguments: (arguments
+    (string
+      content: (string_content) @injection.content))
+  (#eq? @_name "vim.cmd")
+  (#set! injection.language "vim"))
+```
+
+## Directives Reference
+
+### `#set! injection.language`
+
+Explicitly sets the language for the injection:
+
+```query
+(#set! injection.language "python")
+```
+
+### `#set! injection.combined`
+
+Combines multiple matches into a single injection region:
+
+```query
+(#set! injection.combined)
+```
+
+### `#set! injection.include-children`
+
+Includes all child nodes in the injection, not just the direct text:
+
+```query
+(#set! injection.include-children)
+```
+
+### `#offset!`
+
+Adjusts the boundaries of the injection region:
+
+```query
+(#offset! @injection.content 0 1 0 -1)  ; Remove first and last character
+```
+
+The syntax is: `#offset! @capture start_row start_col end_row end_col`
+
+## Inheriting Injections
+
+Like other query files, you can inherit injection queries from a base language:
+
+```query
+; inherits: javascript
+```
+
+This is useful for language variants like TypeScript, JSX, or TSX that extend a base language.
+
+## Language Names
+
+The language name used in injections must match:
+- A Tree-sitter parser installed via `:TSInstall`
+- A filetype registered with `vim.treesitter.language.register()`
+
+Common language names:
+- `javascript`, `typescript`, `python`, `lua`, `rust`, `go`, `c`, `cpp`
+- `html`, `css`, `json`, `yaml`, `toml`
+- `sql`, `graphql`, `regex`
+- `bash`, `vim`, `markdown`
+- `comment` (special language for comment-specific features)
+
+## Testing Injections
+
+To test your injection queries:
+
+1. Use `:InspectTree` to see the parsed tree and verify nodes are captured correctly
+2. Use `:EditQuery injections` to test patterns interactively
+3. Check that the injected language's parser is installed with `:TSInstall <language>`
+4. Use `:Inspect` to see which highlight groups are applied
+
+<Note>
+If injections aren't working:
+- Verify the injected language's parser is installed
+- Check that `@injection.content` captures the right nodes
+- Ensure the language name matches exactly
+- Look for conflicting patterns that might be overriding your injection
+</Note>
+
+## Performance Considerations
+
+- Keep injection patterns specific to avoid unnecessary re-parsing
+- Use predicates to narrow matches (e.g., `#eq?`, `#match?`)
+- Avoid overly broad patterns that match too many nodes
+- Consider the performance impact of deeply nested injections
+
+## Common Patterns
+
+### Tagged Template Literals
+
+```query
+((call_expression
+  function: (identifier) @_tag
+  arguments: (template_string) @injection.content)
+  (#any-of? @_tag "html" "css" "sql" "gql")
+  (#set! injection.language @_tag)
+  (#offset! @injection.content 0 1 0 -1))
+```
+
+### Inline Code in Strings
+
+```query
+((string) @injection.content
+  (#lua-match? @injection.content "^%s*SELECT")
+  (#set! injection.language "sql"))
+```
+
+### Documentation Comments
+
+```query
+((comment) @injection.content
+  (#lua-match? @injection.content "^///%s")
+  (#set! injection.language "markdown")
+  (#offset! @injection.content 0 4 0 0))
+```

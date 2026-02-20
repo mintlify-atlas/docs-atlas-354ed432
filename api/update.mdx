@@ -1,0 +1,148 @@
+---
+title: "update()"
+description: "Update parsers to the latest revision"
+---
+
+## update(languages, opts)
+
+Update the parsers and queries if older than the revision specified in the parser manifest. This checks the installed revision against the configured revision and only updates parsers that are out of date.
+
+<Note>
+This operation is performed **asynchronously** by default. For synchronous operation (e.g., in a bootstrapping script), you need to `wait()` for it.
+</Note>
+
+<Tip>
+It's recommended to add this command as a build step in your plugin manager to keep parsers up to date automatically.
+</Tip>
+
+### Parameters
+
+<ParamField path="languages" type="string|string[]" optional>
+  Language(s) to update. Can be:
+  - A single language name (e.g., `"rust"`)
+  - An array of language names (e.g., `{ "rust", "javascript" }`)
+  - A tier name: `"stable"`, `"unstable"`, or `"all"`
+  - Omitted or empty to update all installed parsers (default behavior)
+  
+  Only parsers that are outdated will be updated.
+</ParamField>
+
+<ParamField path="opts" type="table" optional>
+  Update options
+  
+  <Expandable title="properties">
+    <ParamField path="max_jobs" type="integer" optional>
+      Limit the number of parallel update tasks. 
+      
+      Useful on memory-limited systems. Defaults to 100.
+    </ParamField>
+    
+    <ParamField path="summary" type="boolean" default="false">
+      Print a summary of successful and total operations when updating multiple languages.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="success" type="boolean">
+  Returns `true` if all updates were successful or if all parsers are already up to date, `false` otherwise.
+  
+  Note: This function returns an awaitable object when called asynchronously.
+</ResponseField>
+
+### Usage
+
+#### Update All Installed Parsers
+
+```lua
+-- Update all installed parsers
+require('nvim-treesitter').update()
+
+-- Or explicitly
+require('nvim-treesitter').update('all')
+```
+
+#### Update Specific Parsers
+
+```lua
+-- Update a single parser
+require('nvim-treesitter').update('rust')
+
+-- Update multiple parsers
+require('nvim-treesitter').update({ 'rust', 'lua', 'python' })
+```
+
+#### Synchronous Update
+
+For bootstrapping scripts or when you need to wait for updates to complete:
+
+```lua
+require('nvim-treesitter').update():wait(300000) -- max 5 minutes
+```
+
+#### Update with Summary
+
+```lua
+require('nvim-treesitter').update(nil, { summary = true })
+```
+
+#### Plugin Manager Integration
+
+<CodeGroup>
+
+```lua lazy.nvim
+{
+  'nvim-treesitter/nvim-treesitter',
+  build = function()
+    require('nvim-treesitter').update()
+  end,
+}
+```
+
+```lua packer.nvim
+use {
+  'nvim-treesitter/nvim-treesitter',
+  run = function()
+    require('nvim-treesitter').update():wait()
+  end
+}
+```
+
+</CodeGroup>
+
+### Update Detection
+
+The function determines if a parser needs updating by:
+
+1. **Revision Check**: Comparing the installed revision (stored in `parser-info/<lang>.revision`) with the configured revision in the parser manifest
+2. **Query Link Check**: For parsers without explicit revisions, checking if query files still link to the correct location
+
+If a parser is already at the latest revision, it will be skipped.
+
+### Behavior Details
+
+- If no languages are specified, all installed parsers are checked for updates
+- Unsupported parsers are automatically filtered out
+- Parser dependencies are included in the update
+- Updates are performed with `force = true` internally to overwrite existing files
+- The parser manifest is reloaded before checking for updates
+
+<Info>
+If all parsers are up to date, the function will log "All parsers are up-to-date" (when `summary = true`) and return `true` without performing any operations.
+</Info>
+
+### Requirements
+
+Same as [install()](/api/install):
+
+- `curl` - for downloading parser sources
+- `tar` - for extracting archives
+- `tree-sitter` CLI - for compiling parsers
+- A C compiler - used by tree-sitter for compilation
+
+### See Also
+
+- [install()](/api/install) - Install new parsers
+- [uninstall()](/api/uninstall) - Remove installed parsers
+- [get_installed()](/api/utilities) - List installed parsers

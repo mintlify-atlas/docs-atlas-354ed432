@@ -1,0 +1,229 @@
+---
+title: Adding Parsers
+description: How to add a new language parser to nvim-treesitter
+---
+
+# Adding a New Parser
+
+This guide walks you through adding a new language parser to nvim-treesitter.
+
+<Warning>
+  Before proceeding, ensure your parser meets **all** inclusion criteria. See the requirements section below.
+</Warning>
+
+## Parser Requirements
+
+<Warning>
+  To qualify for inclusion, a parser must meet the following criteria:
+  
+  - Correspond to a filetype detected by Neovim (nightly)
+  - Feature complete, tested by users, and actively maintained (according to maintainer discretion)
+  - Hosted or mirrored on GitHub (other code forges are not reliable enough for CI)
+  - Covered by CI using [upstream workflows](https://github.com/tree-sitter/workflows)
+  - Provide reference queries covered by a [`ts_query_ls` workflow](https://github.com/tree-sitter-grammars/template/blob/9c46d09d688d27c7aef31c2b32f50260de4e7906/.github/workflows/ci.yml#L69-L86)
+  - If the repo contains `src/parser.c`, it must support the latest ABI
+  - If the repo does NOT contain `src/parser.c`, it must contain an up-to-date `src/grammar.json`
+  - If the repo contains an external scanner, it must be written in C99
+</Warning>
+
+### Tier 1 vs Tier 2
+
+**Tier 1 parsers (preferred)** additionally need to:
+
+- Make regular releases following semver:
+  - **Patch** for fixes not affecting queries
+  - **Minor** for changes introducing new nodes or patterns  
+  - **Major** for changes removing nodes or previously valid patterns
+- Provide WASM release artifacts
+
+Tier 1 parsers are strongly recommended as they provide better stability.
+
+## Adding the Parser
+
+<Steps>
+  <Step title="Edit lua/nvim-treesitter/parsers.lua">
+    Add an entry to the returned table with your language configuration:
+
+    ```lua
+    zimbu = {
+      install_info = {
+        url = 'https://github.com/zimbulang/tree-sitter-zimbu', -- git repo
+        revision = 'v2.1', -- tag or commit hash
+        -- optional entries:
+        branch = 'develop', -- only if different from default
+        location = 'parser', -- only if parser is in subdirectory
+        generate = true, -- only if repo lacks pre-generated src/parser.c
+      },
+      maintainers = { '@me' }, -- query maintainers (not parser authors)
+      tier = 1, -- or 2 for latest commit tracking
+      -- optional entries:
+      requires = { 'vim' }, -- if queries inherit from another language
+      readme_note = "an example language",
+    }
+    ```
+
+    <Warning>
+      The "maintainers" field refers to the person maintaining the **queries** in nvim-treesitter, not the parser maintainers. Your duty is to review issues and PRs related to the queries and keep them updated with parser changes.
+    </Warning>
+  </Step>
+
+  <Step title="Register filetype mapping (if needed)">
+    If the parser name differs from the Vim filetype, add an entry to the `filetypes` table in `plugin/filetypes.lua`:
+
+    ```lua
+    zimbu = { 'zu' },
+    ```
+  </Step>
+
+  <Step title="Add queries">
+    Create query files in `runtime/queries/zimbu/`:
+
+    - `highlights.scm` - Required for syntax highlighting
+    - `injections.scm` - For multi-language support (optional)
+    - `folds.scm` - For code folding (optional)
+    - `indents.scm` - For automatic indentation (optional)
+
+    See [Writing Queries](/contributing/writing-queries) for detailed guidelines.
+
+    <Warning>
+      You need to add queries for the parser to be useful! At minimum, provide a `highlights.scm` file.
+    </Warning>
+  </Step>
+
+  <Step title="Update documentation">
+    Run the documentation generator to update the supported languages list:
+
+    ```bash
+    make docs
+    ```
+
+    Or on Windows:
+
+    ```bash
+    ./scripts/update-readme.lua
+    ```
+  </Step>
+
+  <Step title="Test installation">
+    Verify both installation methods work without errors:
+
+    ```vim
+    :TSInstall zimbu
+    :TSInstallFromGrammar zimbu
+    ```
+
+    Or use the check script:
+
+    ```bash
+    :checkhealth treesitter
+    # or
+    ./scripts/check-parsers.lua zimbu
+    ```
+  </Step>
+</Steps>
+
+## Using Local Paths
+
+For local parser development, you can use a `path` instead of `url`:
+
+```lua
+zimbu = {
+  install_info = {
+    path = '~/parsers/tree-sitter-zimbu', -- local path
+    -- optional entries:
+    location = 'parser',
+    generate = true,
+  },
+  maintainers = { '@me' },
+  tier = 2,
+}
+```
+
+<Note>
+  Local paths always use the directory's current state. The `branch` and `revision` fields are ignored.
+</Note>
+
+## Submitting Your PR
+
+When you're ready, open a Pull Request using the provided template:
+
+```bash
+gh pr create -B main -T new_language
+```
+
+### PR Checklist
+
+Before submitting, ensure:
+
+- `./scripts/install-parsers.lua <language>` works without warnings
+- `./scripts/install-parsers.lua --generate <language>` works without warnings
+- `make query` works without warnings
+- `make docs` has been run
+- You've added at least a `highlights.scm` query file
+
+### PR Content
+
+Your PR should include:
+
+1. **Language name and description** - Link to official language documentation
+2. **File extension** - E.g., `.zu`
+3. **Representative code sample** - Max 50 lines showing typical language features
+4. **Parser repository** - GitHub URL
+5. **Parsed tree** - Output from `tree-sitter parse` or `:InspectTree`
+6. **Query source** - Where the queries came from or "written from scratch"
+7. **Screenshots** - Code sample with syntax highlighting applied
+
+## Parser Configuration Options
+
+### Required Fields
+
+- `install_info.url` or `install_info.path` - Parser location
+- `install_info.revision` - Tag or commit hash (not needed for local paths)
+- `maintainers` - Array of GitHub usernames who maintain the queries
+- `tier` - 1 for versioned releases, 2 for latest commit
+
+### Optional Fields
+
+- `install_info.branch` - Use a non-default branch
+- `install_info.location` - Subdirectory containing the parser (for monorepos)
+- `install_info.generate` - Set to `true` if the repo doesn't contain pre-generated `src/parser.c`
+- `requires` - Array of languages this parser's queries inherit from
+- `readme_note` - Additional information for documentation
+
+## Troubleshooting
+
+### Parser won't install
+
+- Verify the repository URL is correct and accessible
+- Check that the revision/tag exists
+- Ensure the repository structure matches (use `location` for subdirectories)
+
+### Queries not working
+
+- Run `make lintquery` to check for invalid captures
+- Run `make checkquery` to verify patterns match the parser
+- Use `:InspectTree` in Neovim to see the parsed syntax tree
+- Use `:EditQuery` to test query patterns interactively
+
+### CI failures
+
+- Ensure your parser repository has the required CI workflows
+- Verify the parser supports the latest ABI version
+- Check that external scanners are written in C99
+
+## External Scanners
+
+<Warning>
+  If your parser requires an external scanner, it **must** be written in C99. External scanners in other languages are not supported by nvim-treesitter.
+</Warning>
+
+External scanners are additional C code that handle complex lexical patterns tree-sitter's grammar DSL cannot express efficiently.
+
+## Next Steps
+
+After adding your parser:
+
+- [Write comprehensive queries](/contributing/writing-queries)
+- [Add tests](/contributing/testing) to verify functionality
+- Monitor issues and PRs related to your language
+- Keep queries updated when the parser changes

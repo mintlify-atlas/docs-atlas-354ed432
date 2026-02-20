@@ -1,0 +1,130 @@
+---
+title: "install()"
+description: "Download, compile, and install treesitter parsers"
+---
+
+## install(languages, opts)
+
+Download, compile, and install the specified treesitter parsers and copy the corresponding queries to a directory on `runtimepath`, enabling their use in Neovim.
+
+<Note>
+This operation is performed **asynchronously** by default. For synchronous operation (e.g., in a bootstrapping script), you need to `wait()` for it.
+</Note>
+
+### Parameters
+
+<ParamField path="languages" type="string|string[]" required>
+  Language(s) to install. Can be:
+  - A single language name (e.g., `"rust"`)
+  - An array of language names (e.g., `{ "rust", "javascript", "python" }`)
+  - A tier name: `"stable"`, `"unstable"`, `"unmaintained"`, or `"all"` (not recommended)
+  
+  The special value `"all"` installs all available parsers.
+</ParamField>
+
+<ParamField path="opts" type="table" optional>
+  Installation options
+  
+  <Expandable title="properties">
+    <ParamField path="force" type="boolean" default="false">
+      Force installation even if the parser is already installed. Useful for reinstalling parsers.
+    </ParamField>
+    
+    <ParamField path="generate" type="boolean" default="false">
+      Generate `parser.c` from `grammar.json` or `grammar.js` before compiling. 
+      
+      Useful for languages where the provided `parser.c` is outdated or uses an unsupported ABI version.
+    </ParamField>
+    
+    <ParamField path="max_jobs" type="integer" optional>
+      Limit the number of parallel installation tasks. 
+      
+      Useful in combination with `generate` on memory-limited systems. Defaults to 100.
+    </ParamField>
+    
+    <ParamField path="summary" type="boolean" default="false">
+      Print a summary of successful and total operations when installing multiple languages.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="success" type="boolean">
+  Returns `true` if all installations were successful, `false` otherwise.
+  
+  Note: This function returns an awaitable object when called asynchronously.
+</ResponseField>
+
+### Usage
+
+#### Basic Installation
+
+```lua
+-- Install a single parser
+require('nvim-treesitter').install('rust')
+
+-- Install multiple parsers
+require('nvim-treesitter').install({ 'rust', 'javascript', 'python' })
+```
+
+#### Synchronous Installation
+
+For bootstrapping scripts or when you need to wait for installation to complete:
+
+```lua
+require('nvim-treesitter').install({ 'rust', 'javascript', 'zig' })
+  :wait(300000) -- max 5 minutes
+```
+
+#### Force Reinstall
+
+```lua
+require('nvim-treesitter').install('rust', { force = true })
+```
+
+#### Generate from Grammar
+
+```lua
+require('nvim-treesitter').install('c', { 
+  generate = true,
+  max_jobs = 4  -- Limit parallel jobs on low-memory systems
+})
+```
+
+#### Install with Summary
+
+```lua
+require('nvim-treesitter').install(
+  { 'lua', 'vim', 'vimdoc', 'query' },
+  { summary = true }
+)
+```
+
+### Installation Process
+
+The install function performs these steps for each language:
+
+1. **Download**: Fetches the parser source from the configured repository (usually GitHub)
+2. **Extract**: Unpacks the tarball to a temporary cache directory
+3. **Generate** (optional): Runs `tree-sitter generate` if requested or required
+4. **Compile**: Builds the parser using `tree-sitter build`
+5. **Install**: Copies the compiled parser to the installation directory
+6. **Queries**: Links or copies query files to make them available to Neovim
+
+<Info>
+The function automatically handles parser dependencies. If a parser requires other parsers, they will be installed automatically.
+</Info>
+
+### Requirements
+
+- `curl` - for downloading parser sources
+- `tar` - for extracting archives  
+- `tree-sitter` CLI - for compiling parsers (and optionally generating from grammar)
+- A C compiler - used by tree-sitter for compilation
+
+### See Also
+
+- [update()](/api/update) - Update installed parsers to latest versions
+- [uninstall()](/api/uninstall) - Remove installed parsers
+- [get_available()](/api/utilities) - List available parsers

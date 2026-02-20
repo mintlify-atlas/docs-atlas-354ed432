@@ -1,0 +1,517 @@
+---
+title: Testing
+description: Testing parsers and queries in nvim-treesitter
+---
+
+# Testing Parsers and Queries
+
+Thorough testing ensures parsers and queries work correctly. This guide covers the testing tools and workflows for nvim-treesitter.
+
+## Quick Testing
+
+Run all checks before submitting:
+
+```bash
+make all
+```
+
+This runs:
+- Lua code formatting and checking
+- Query formatting, linting, and validation
+- Documentation generation
+- Test suite
+
+## Testing Parsers
+
+### Installation Tests
+
+Test that your parser installs correctly:
+
+```vim
+:TSInstall <language>
+:TSInstallFromGrammar <language>
+```
+
+Both commands should complete without errors.
+
+### Health Check
+
+Run Neovim's health check:
+
+```vim
+:checkhealth treesitter
+```
+
+This verifies:
+- Parser is installed
+- Parser loads correctly
+- ABI version is supported
+- Queries are valid
+
+### Parser Validation Script
+
+Check specific parsers:
+
+```bash
+./scripts/check-parsers.lua <language>
+```
+
+Or check all installed parsers:
+
+```bash
+./scripts/check-parsers.lua
+```
+
+The script outputs:
+- ABI version for each parser
+- State count (complexity metric)
+- Any errors loading the parser
+
+<Warning>
+  All parsers must support the latest ABI version. Older ABI versions may not work with recent Neovim versions.
+</Warning>
+
+### Manual Parser Testing
+
+Use the tree-sitter CLI to test parsing:
+
+```bash
+tree-sitter parse path/to/file.ext
+```
+
+This shows:
+- The parsed syntax tree
+- Any parse errors
+- Parse time
+
+## Testing Queries
+
+### Query Validation
+
+Run the full query test suite:
+
+```bash
+make query
+```
+
+This executes:
+
+1. **Format check** - Ensures queries follow formatting standards
+2. **Lint check** - Validates captures are correct for Neovim
+3. **Pattern check** - Verifies patterns match the installed parser
+
+### Individual Query Checks
+
+Run checks separately:
+
+```bash
+# Format queries to standard style
+make formatquery
+
+# Validate captures are correct
+make lintquery
+
+# Check patterns match parsers
+make checkquery
+```
+
+### Query Validation Script
+
+Check specific languages:
+
+```bash
+./scripts/check-queries.lua <language>
+```
+
+Or check all installed queries:
+
+```bash
+./scripts/check-queries.lua
+```
+
+The script outputs:
+- Parse time for each query file
+- Any query syntax errors
+- Invalid patterns
+
+<Warning>
+  `make checkquery` and `./scripts/check-queries.lua` require parsers to be installed in the default directory through nvim-treesitter. Install via `:TSInstall <language>` first.
+</Warning>
+
+## Interactive Testing
+
+### InspectTree
+
+View the syntax tree for the current buffer:
+
+```vim
+:InspectTree
+```
+
+This opens a window showing:
+- The complete syntax tree
+- Node types and ranges
+- Highlights the text corresponding to the node under cursor
+
+Use this to:
+- Understand parser output
+- Find correct node types for queries
+- Debug why patterns don't match
+
+### EditQuery
+
+Test query patterns interactively:
+
+```vim
+:EditQuery
+```
+
+This opens a playground where you can:
+- Write query patterns
+- See which parts of the buffer are captured
+- Test different capture groups
+- Iterate quickly on query development
+
+### Inspect Highlights
+
+See which highlight groups are applied at cursor:
+
+```vim
+:Inspect
+```
+
+Shows:
+- Active highlight groups
+- Capture names
+- Priority values
+- Syntax stack
+
+Use this to:
+- Debug highlight conflicts
+- Verify captures work correctly
+- Understand highlight precedence
+
+## Testing Highlights
+
+### Visual Testing
+
+<Steps>
+  <Step title="Create test file">
+    Create a file with representative code in your language:
+
+    ```bash
+    nvim test.<extension>
+    ```
+  </Step>
+
+  <Step title="Enable highlighting">
+    Enable tree-sitter highlighting:
+
+    ```vim
+    :lua vim.treesitter.start()
+    ```
+  </Step>
+
+  <Step title="Verify highlighting">
+    Check that:
+    - Keywords are highlighted correctly
+    - Strings and comments stand out
+    - Functions and types are distinguished
+    - No obvious missing or incorrect highlights
+  </Step>
+
+  <Step title="Use :Inspect">
+    Move cursor to different tokens and run:
+
+    ```vim
+    :Inspect
+    ```
+
+    Verify the capture names are semantically correct.
+  </Step>
+</Steps>
+
+### Highlight Assertions
+
+The test suite supports highlight assertions for automated testing.
+
+Create test files in `tests/highlights/<language>/`:
+
+```language
+function test() {
+  // <- @keyword.function
+  //     ^ @function
+  return 42;
+  // <- @keyword.return
+  //     ^^ @number
+}
+```
+
+Run tests:
+
+```bash
+make tests TESTS=highlights/<language>
+```
+
+## Testing Injections
+
+Test multi-language support:
+
+<Steps>
+  <Step title="Create test file">
+    Create a file with embedded languages (e.g., HTML with JavaScript):
+
+    ```html
+    <script>
+      console.log("test");
+    </script>
+    ```
+  </Step>
+
+  <Step title="Enable highlighting">
+    ```vim
+    :lua vim.treesitter.start()
+    ```
+  </Step>
+
+  <Step title="Verify injections">
+    Use `:InspectTree` to verify:
+    - Embedded regions are parsed correctly
+    - Syntax tree shows injected language nodes
+    - Highlighting works in both languages
+  </Step>
+</Steps>
+
+## Testing Folds
+
+Test code folding:
+
+<Steps>
+  <Step title="Configure folding">
+    Enable tree-sitter folds:
+
+    ```vim
+    :set foldmethod=expr
+    :set foldexpr=v:lua.vim.treesitter.foldexpr()
+    ```
+  </Step>
+
+  <Step title="Test folding">
+    - Use `zc` to close folds
+    - Use `zo` to open folds
+    - Use `zM` to close all folds
+    - Use `zR` to open all folds
+  </Step>
+
+  <Step title="Verify fold regions">
+    Check that:
+    - Functions fold correctly
+    - Blocks fold at appropriate boundaries
+    - Nested folds work
+    - No unexpected fold regions
+  </Step>
+</Steps>
+
+## Testing Indentation
+
+<Warning>
+  Tree-sitter indentation is experimental and may have issues.
+</Warning>
+
+Test automatic indentation:
+
+<Steps>
+  <Step title="Enable tree-sitter indentation">
+    ```vim
+    :set indentexpr=v:lua.require'nvim-treesitter'.indentexpr()
+    ```
+  </Step>
+
+  <Step title="Test indentation">
+    - Type code and press Enter
+    - Use `=` to re-indent lines
+    - Test various language constructs
+  </Step>
+
+  <Step title="Verify behavior">
+    Check that:
+    - Indentation increases after opening blocks
+    - Indentation decreases after closing blocks
+    - Alignment works for function arguments
+    - No unexpected indentation changes
+  </Step>
+</Steps>
+
+## Running the Test Suite
+
+The project includes a test suite using [plenary.nvim](https://github.com/nvim-lua/plenary.nvim).
+
+### Run all tests
+
+```bash
+make tests
+```
+
+### Run specific tests
+
+```bash
+make tests TESTS=highlights/<language>
+make tests TESTS=parser/<language>
+```
+
+### Test output
+
+Tests show:
+- Pass/fail status
+- Error messages for failures
+- Execution time
+
+## CI Testing
+
+### Required CI Workflows
+
+<Warning>
+  Parser repositories must have CI workflows:
+  - [Upstream tree-sitter workflows](https://github.com/tree-sitter/workflows)
+  - [ts_query_ls workflow](https://github.com/tree-sitter-grammars/template/blob/9c46d09d688d27c7aef31c2b32f50260de4e7906/.github/workflows/ci.yml#L69-L86) for query validation
+</Warning>
+
+These workflows verify:
+- Parser compiles on all platforms
+- Query syntax is valid
+- No regressions in parsing
+
+### Local CI Simulation
+
+Use the CI install script:
+
+```bash
+./scripts/ci-install.sh
+```
+
+This sets up dependencies similar to CI environments.
+
+## Lua Code Testing
+
+### Format Lua code
+
+```bash
+make formatlua
+```
+
+Uses [StyLua](https://github.com/JohnnyMorganz/StyLua) to format all Lua code.
+
+### Check Lua code
+
+```bash
+make checklua
+```
+
+Uses [lua-language-server](https://github.com/LuaLS/lua-language-server) to:
+- Type check Lua code
+- Find potential errors
+- Validate API usage
+
+## Documentation Testing
+
+### Generate documentation
+
+```bash
+make docs
+```
+
+Updates `SUPPORTED_LANGUAGES.md` with:
+- List of supported languages
+- Query availability per language
+- Maintainer information
+
+<Warning>
+  Always run `make docs` before submitting a PR that adds or modifies parsers.
+</Warning>
+
+## Common Test Failures
+
+### Query linting fails
+
+**Error**: Invalid captures
+
+**Solution**: Check the [valid captures list](/contributing/writing-queries) and use only approved captures for Neovim.
+
+### Query checking fails
+
+**Error**: Pattern doesn't match
+
+**Solution**: 
+- Use `:InspectTree` to see actual node types
+- Verify parser is installed: `:TSInstall <language>`
+- Check that pattern syntax is correct
+
+### Parser loading fails
+
+**Error**: ABI version mismatch
+
+**Solution**: Parser must support the latest ABI. Update the parser or contact parser maintainers.
+
+### Highlights don't work
+
+**Diagnosis**:
+- Run `:Inspect` at the position
+- Check `:InspectTree` for node types
+- Run `make lintquery` for validation
+
+**Solution**:
+- Ensure capture names match Neovim's valid captures
+- Verify patterns match actual node types
+- Check highlight groups are defined in your colorscheme
+
+## Performance Testing
+
+### Query performance
+
+The check script shows parse times:
+
+```bash
+./scripts/check-queries.lua
+```
+
+Look for:
+- Queries taking > 10ms to parse
+- Significant time differences between similar languages
+
+### Parser performance
+
+Use `tree-sitter parse` to measure:
+
+```bash
+time tree-sitter parse large-file.ext
+```
+
+## Before Submitting
+
+Run the complete test suite:
+
+```bash
+make all
+```
+
+Ensure:
+- All tests pass
+- No linting errors
+- Documentation is updated
+- New parsers install correctly
+- Queries are validated
+
+## Continuous Testing
+
+As a query maintainer:
+
+1. **Monitor parser updates** - Parser changes may break queries
+2. **Test with real code** - Use actual projects in your language
+3. **Address issues promptly** - Users rely on working queries
+4. **Update queries** - Keep pace with language evolution
+
+## Next Steps
+
+- Review [contributing overview](/contributing/overview)
+- Learn about [adding parsers](/contributing/adding-parsers)
+- Study [query writing guidelines](/contributing/writing-queries)

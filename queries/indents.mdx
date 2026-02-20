@@ -1,0 +1,511 @@
+---
+title: Indent Queries
+description: Experimental Tree-sitter-based indentation queries for automatic code formatting in Neovim
+---
+
+<Warning>
+Tree-sitter-based indentation is still experimental and likely to have breaking changes in the future. Use with caution in production environments.
+</Warning>
+
+Indent queries control automatic indentation for a language using Tree-sitter's understanding of code structure. This feature is provided by nvim-treesitter.
+
+## Enabling Indentation
+
+To enable Tree-sitter-based indentation, put the following in your `ftplugin` or `FileType` autocommand:
+
+```lua
+vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+```
+
+Note the specific quotes used - they are important!
+
+## Valid Captures
+
+<ParamField path="@indent.begin" type="capture">
+  Specifies that the next line should be indented. Multiple indents on the same line get collapsed.
+</ParamField>
+
+<ParamField path="@indent.end" type="capture">
+  Specifies that the indented region ends and any text subsequent to the capture should be dedented.
+</ParamField>
+
+<ParamField path="@indent.branch" type="capture">
+  Specifies that a dedented region starts at the line *including* the captured nodes.
+</ParamField>
+
+<ParamField path="@indent.dedent" type="capture">
+  Specifies dedenting starting on the *next* line.
+</ParamField>
+
+<ParamField path="@indent.auto" type="capture">
+  Behaves like Vim's `autoindent` option - copies the indentation of the previous line when opening a new line.
+</ParamField>
+
+<ParamField path="@indent.ignore" type="capture">
+  Specifies that no indent should be added to this node.
+</ParamField>
+
+<ParamField path="@indent.zero" type="capture">
+  Sets the indentation of this node to 0 (removes *all* indentation).
+</ParamField>
+
+<ParamField path="@indent.align" type="capture">
+  Specifies blocks that should have the same indentation, with alignment to opening delimiters.
+</ParamField>
+
+## Basic Patterns
+
+### Simple Indentation
+
+```query
+; Indent after these constructs
+[
+  (function_definition)
+  (if_statement)
+  (for_statement)
+  (while_statement)
+] @indent.begin
+
+; Dedent on closing delimiters
+[
+  "}"
+  "]"
+  ")"
+] @indent.branch
+```
+
+### Immediate Indentation
+
+Use `#set! indent.immediate` to indent the next line even when the block has no content yet:
+
+```query
+((if_statement) @indent.begin
+  (#set! indent.immediate 1))
+```
+
+This allows:
+```python
+if True:<CR>
+    # Auto indent to here (even though block is empty)
+```
+
+## Alignment
+
+The `@indent.align` capture creates aligned indentation for delimited blocks:
+
+```query
+((argument_list) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+```
+
+This allows all these styles:
+
+```python
+# Style 1: First argument on same line
+foo(a,
+    b,
+    c)
+
+# Style 2: All arguments on new lines
+foo(
+  a,
+  b,
+  c)
+
+# Style 3: Closing delimiter on its own line
+foo(
+  a,
+  b,
+  c
+)
+```
+
+### Avoid Last Matching Next
+
+For some languages, the last line of an `@indent.align` block must not have the same indent as the natural next line:
+
+```python
+# Correct:
+if (a > b and
+    c < d):
+    pass
+
+# Incorrect:
+if (a > b and
+    c < d):
+    pass  # This line incorrectly aligned
+```
+
+Use `#set! indent.avoid_last_matching_next`:
+
+```query
+(if_statement
+  condition: (parenthesized_expression) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")")
+  (#set! indent.avoid_last_matching_next 1))
+```
+
+## Real-World Examples
+
+### Python Indents
+
+```query
+; Basic indentation
+[
+  (import_from_statement)
+  (generator_expression)
+  (list_comprehension)
+  (set_comprehension)
+  (dictionary_comprehension)
+  (tuple_pattern)
+  (list_pattern)
+  (binary_operator)
+  (lambda)
+  (concatenated_string)
+] @indent.begin
+
+; Alignment for collections
+((list) @indent.align
+  (#set! indent.open_delimiter "[")
+  (#set! indent.close_delimiter "]"))
+
+((dictionary) @indent.align
+  (#set! indent.open_delimiter "{")
+  (#set! indent.close_delimiter "}"))
+
+((set) @indent.align
+  (#set! indent.open_delimiter "{")
+  (#set! indent.close_delimiter "}"))
+
+((parenthesized_expression) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+
+; Immediate indentation for control flow
+((for_statement) @indent.begin
+  (#set! indent.immediate 1))
+
+((if_statement) @indent.begin
+  (#set! indent.immediate 1))
+
+((while_statement) @indent.begin
+  (#set! indent.immediate 1))
+
+((try_statement) @indent.begin
+  (#set! indent.immediate 1))
+
+((function_definition) @indent.begin
+  (#set! indent.immediate 1))
+
+((class_definition) @indent.begin
+  (#set! indent.immediate 1))
+
+((with_statement) @indent.begin
+  (#set! indent.immediate 1))
+
+((match_statement) @indent.begin
+  (#set! indent.immediate 1))
+
+((case_clause) @indent.begin
+  (#set! indent.immediate 1))
+
+; Conditional alignment
+(if_statement
+  condition: (parenthesized_expression) @indent.align
+  (#lua-match? @indent.align "[^\n ]%)$")
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")")
+  (#set! indent.avoid_last_matching_next 1))
+
+; Dedent control flow keywords
+[
+  (break_statement)
+  (continue_statement)
+] @indent.dedent
+
+; Branch points for dedenting
+[
+  ")"
+  "]"
+  "}"
+  (elif_clause)
+  (else_clause)
+  (except_clause)
+  (finally_clause)
+] @indent.branch
+
+; Auto-indent for strings
+(string) @indent.auto
+```
+
+### JavaScript/TypeScript Indents
+
+```query
+[
+  (object)
+  (array)
+  (switch_case)
+  (switch_default)
+  (statement_block)
+  (class_body)
+] @indent.begin
+
+((arguments) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+
+((formal_parameters) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+
+((object) @indent.align
+  (#set! indent.open_delimiter "{")
+  (#set! indent.close_delimiter "}"))
+
+((array) @indent.align
+  (#set! indent.open_delimiter "[")
+  (#set! indent.close_delimiter "]"))
+
+[
+  "}"
+  "]"
+  ")"
+] @indent.branch
+
+[
+  (break_statement)
+  (continue_statement)
+  (return_statement)
+] @indent.dedent
+```
+
+### Rust Indents
+
+```query
+[
+  (struct_item)
+  (enum_item)
+  (impl_item)
+  (trait_item)
+  (function_item)
+  (mod_item)
+  (macro_definition)
+  (block)
+  (match_arm)
+  (use_list)
+  (field_declaration_list)
+  (field_initializer_list)
+  (enum_variant_list)
+] @indent.begin
+
+((parameters) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+
+((arguments) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+
+((array_expression) @indent.align
+  (#set! indent.open_delimiter "[")
+  (#set! indent.close_delimiter "]"))
+
+[
+  "}"
+  "]"
+  ")"
+] @indent.branch
+```
+
+### C/C++ Indents
+
+```query
+[
+  (compound_statement)
+  (function_definition)
+  (struct_specifier)
+  (enum_specifier)
+  (class_specifier)
+  (namespace_definition)
+  (if_statement)
+  (switch_statement)
+  (case_statement)
+  (for_statement)
+  (while_statement)
+  (do_statement)
+  (initializer_list)
+] @indent.begin
+
+((parameter_list) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+
+((argument_list) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+
+((initializer_list) @indent.align
+  (#set! indent.open_delimiter "{")
+  (#set! indent.close_delimiter "}"))
+
+[
+  "}"
+  "]"
+  ")"
+  "break;"
+  "continue;"
+  "return;"
+] @indent.branch
+```
+
+### Lua Indents
+
+```query
+[
+  (function_declaration)
+  (function_definition)
+  (if_statement)
+  (for_statement)
+  (while_statement)
+  (repeat_statement)
+  (do_statement)
+  (table_constructor)
+] @indent.begin
+
+((arguments) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+
+((parameters) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+
+((table_constructor) @indent.align
+  (#set! indent.open_delimiter "{")
+  (#set! indent.close_delimiter "}"))
+
+[
+  "end"
+  "}"
+  ")"
+  "until"
+] @indent.branch
+```
+
+## Error Recovery
+
+Indent queries can include patterns for ERROR nodes to provide better indentation while typing:
+
+```query
+; Handle incomplete try-except blocks
+(ERROR
+  "try"
+  .
+  ":"
+  (#set! indent.immediate 1)) @indent.begin
+
+; Handle incomplete parentheses
+(ERROR
+  "(" @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")")
+  .
+  (_))
+```
+
+## Directives Reference
+
+### `#set! indent.immediate`
+
+Allows the next line to indent even when the block has no content:
+
+```query
+((if_statement) @indent.begin
+  (#set! indent.immediate 1))
+```
+
+### `#set! indent.open_delimiter` / `#set! indent.close_delimiter`
+
+Specifies delimiters for `@indent.align` blocks:
+
+```query
+((argument_list) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+```
+
+### `#set! indent.avoid_last_matching_next`
+
+Ensures the last line of an aligned block doesn't match the indent of the next statement:
+
+```query
+((parenthesized_expression) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")")
+  (#set! indent.avoid_last_matching_next 1))
+```
+
+## Testing Indents
+
+To test your indent queries:
+
+1. Enable Tree-sitter indentation (see [Enabling Indentation](#enabling-indentation))
+2. Use `o` or `O` to create new lines and observe indentation
+3. Use `=` in visual mode or `==` to re-indent lines
+4. Use `:InspectTree` to verify which nodes are being captured
+5. Test with `make checkquery` to verify patterns are valid
+
+## Common Issues
+
+<Warning>
+**Indentation not working**
+
+Verify that:
+- `indentexpr` is set correctly (check with `:set indentexpr?`)
+- The parser is installed with `:TSInstall <language>`
+- Your patterns match actual nodes (use `:InspectTree`)
+- Tree-sitter is active (check `:InspectTree` shows parsed tree)
+</Warning>
+
+<Warning>
+**Too much/too little indentation**
+
+Check for:
+- Overlapping `@indent.begin` and `@indent.end` captures
+- Missing `@indent.branch` for closing delimiters
+- Incorrect delimiter specifications in `@indent.align`
+- Conflicting patterns that match the same nodes
+</Warning>
+
+<Note>
+Indentation behavior can be subtle. Test thoroughly with real code examples, especially edge cases like:
+- Empty blocks
+- Nested structures
+- Multi-line expressions
+- Error recovery (incomplete code)
+</Note>
+
+## Best Practices
+
+1. **Start simple** - Begin with basic `@indent.begin` and `@indent.branch` patterns
+2. **Use alignment** - `@indent.align` provides flexible, natural indentation
+3. **Handle errors** - Include ERROR node patterns for better typing experience
+4. **Test edge cases** - Empty blocks, nesting, multi-line expressions
+5. **Use immediate mode** - For statements that always have blocks (if, for, etc.)
+6. **Be consistent** - Match the language's standard indentation style
+
+## Debugging
+
+When debugging indent issues:
+
+1. Use `:InspectTree` to see which nodes are being parsed
+2. Use `:EditQuery indents` to test patterns interactively
+3. Check the node structure carefully - you might be capturing the wrong node
+4. Test with `=` operator to see if re-indenting works correctly
+5. Try disabling other indent plugins that might conflict
+
+<Note>
+Since this feature is experimental, expect some rough edges. Consider falling back to traditional indentation methods for production use, or contribute improvements to nvim-treesitter!
+</Note>

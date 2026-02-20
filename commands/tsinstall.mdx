@@ -1,0 +1,96 @@
+---
+title: ':TSInstall'
+description: Install treesitter parsers for one or more languages
+---
+
+## Overview
+
+The `:TSInstall` command downloads, compiles, and installs treesitter parsers for specified languages. Installation is performed asynchronously and includes both the parser and corresponding query files.
+
+## Syntax
+
+```vim
+:TSInstall {language} [...]
+:TSInstall! {language} [...]
+```
+
+<ParamField path="language" type="string" required>
+  One or more language names to install. Can be:
+  - Specific language names (e.g., `rust`, `javascript`, `python`)
+  - `stable` - Install all stable parsers
+  - `unstable` - Install all unstable parsers
+  - `all` - Install all available parsers (not recommended)
+</ParamField>
+
+<ParamField path="!" type="bang modifier">
+  Force installation even if the parser is already installed. This will reinstall and overwrite existing parsers.
+</ParamField>
+
+## Behavior
+
+- Installation is **asynchronous** by default
+- The command is a no-op if the parser(s) are already installed (unless `!` is used)
+- Parsers are installed to `stdpath('data')/site/` by default (configurable via `setup()`)
+- The installation directory is automatically prepended to `runtimepath`
+- Tab completion shows available parsers that can be installed
+
+<Note>
+  The parser installation directory can be customized using `require'nvim-treesitter'.setup({ install_dir = "/custom/path" })` before running installation commands.
+</Note>
+
+## Examples
+
+### Install a single language
+
+```vim
+:TSInstall rust
+```
+
+Installs the Rust parser and queries.
+
+### Install multiple languages
+
+```vim
+:TSInstall rust javascript python lua
+```
+
+Installs parsers for Rust, JavaScript, Python, and Lua.
+
+### Install all stable parsers
+
+```vim
+:TSInstall stable
+```
+
+Installs all parsers marked as stable in the manifest.
+
+### Force reinstall
+
+```vim
+:TSInstall! typescript
+```
+
+Force reinstallation of the TypeScript parser even if it's already installed.
+
+## Related Commands
+
+- `:TSInstallFromGrammar` - Install parsers and regenerate `parser.c` from grammar
+- `:TSUpdate` - Update installed parsers to latest versions
+- `:TSUninstall` - Remove installed parsers
+- `:TSLog` - View installation logs
+
+## Source Implementation
+
+Implemented in `plugin/nvim-treesitter.lua:29-37`:
+
+```lua
+api.nvim_create_user_command('TSInstall', function(args)
+  require('nvim-treesitter.install').install(args.fargs, { force = args.bang, summary = true })
+end, {
+  nargs = '+',
+  bang = true,
+  bar = true,
+  complete = complete_available_parsers,
+  desc = 'Install treesitter parsers',
+})
+```

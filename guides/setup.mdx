@@ -1,0 +1,178 @@
+---
+title: Setup and Configuration
+description: Learn how to install and configure nvim-treesitter for your Neovim setup
+---
+
+`nvim-treesitter` can be configured by calling the `setup()` function, though it works with sensible defaults out of the box.
+
+## Requirements
+
+Before installing nvim-treesitter, ensure you have:
+
+- Neovim 0.11.0 or later (nightly)
+- `tar` and `curl` in your PATH
+- [`tree-sitter-cli`](https://github.com/tree-sitter/tree-sitter/blob/master/crates/cli/README.md) (0.26.1 or later)
+- A C compiler in your PATH (see [cc crate requirements](https://docs.rs/cc/latest/cc/#compile-time-requirements))
+
+<Warning>
+  The support policy covers only:
+  1. The latest [stable release](https://github.com/neovim/neovim/releases/tag/stable)
+  2. The latest [nightly prerelease](https://github.com/neovim/neovim/releases/tag/nightly)
+  
+  Other versions may work but are not tested or supported.
+</Warning>
+
+## Installation
+
+### With lazy.nvim
+
+The recommended way to install nvim-treesitter with [lazy.nvim](https://github.com/folke/lazy.nvim) is:
+
+```lua
+{
+  'nvim-treesitter/nvim-treesitter',
+  lazy = false,
+  build = ':TSUpdate'
+}
+```
+
+<Warning>
+  nvim-treesitter does **not** support lazy-loading. Always set `lazy = false`.
+</Warning>
+
+The `build = ':TSUpdate'` ensures parsers are automatically updated when you update the plugin.
+
+### With vim-plug
+
+```vim
+Plug 'nvim-treesitter/nvim-treesitter'
+```
+
+Then run `:PlugInstall` and `:TSUpdate`.
+
+### With packer.nvim
+
+```lua
+use {
+  'nvim-treesitter/nvim-treesitter',
+  run = ':TSUpdate'
+}
+```
+
+### With native packages
+
+```bash
+git clone https://github.com/nvim-treesitter/nvim-treesitter \
+  ~/.local/share/nvim/site/pack/nvim-treesitter/start/nvim-treesitter
+```
+
+Then run `:TSUpdate` in Neovim.
+
+## Basic Configuration
+
+<Note>
+  You do **not** need to call `setup()` for nvim-treesitter to work. It uses sensible defaults.
+</Note>
+
+The basic setup call looks like this:
+
+```lua
+require'nvim-treesitter'.setup {
+  -- Configuration options go here
+}
+```
+
+## Configuration Options
+
+### Custom Install Directory
+
+By default, parsers and queries are installed to `vim.fn.stdpath('data') .. '/site'`. You can change this:
+
+```lua
+require'nvim-treesitter'.setup {
+  -- Directory to install parsers and queries to (prepended to runtimepath)
+  install_dir = vim.fn.stdpath('data') .. '/site'
+}
+```
+
+<Warning>
+  The `install_dir` is automatically prepended to your `runtimepath` to ensure parsers and queries have priority.
+</Warning>
+
+### Complete Example
+
+Here's a complete configuration example:
+
+```lua init.lua
+require'nvim-treesitter'.setup {
+  install_dir = vim.fn.stdpath('data') .. '/treesitter',
+}
+
+-- Install parsers on startup
+require('nvim-treesitter').install({ 'lua', 'python', 'javascript' })
+```
+
+<Note>
+  The `install()` function runs asynchronously by default.
+</Note>
+
+## Synchronous Installation (Bootstrapping)
+
+If you're writing a bootstrap script and need to wait for parsers to install:
+
+```lua
+-- Install parsers and wait up to 5 minutes
+require('nvim-treesitter').install({
+  'rust', 
+  'javascript', 
+  'zig'
+}):wait(300000)
+```
+
+This is useful in automation scripts or when you need parsers installed before proceeding.
+
+## Install Directories Explained
+
+When you configure nvim-treesitter, files are organized as follows:
+
+```
+install_dir/
+├── parser/           # Compiled parser .so files
+│   ├── lua.so
+│   ├── python.so
+│   └── ...
+├── queries/          # Query files for each language
+│   ├── lua/
+│   │   ├── highlights.scm
+│   │   ├── indents.scm
+│   │   └── ...
+│   └── python/
+│       └── ...
+└── parser-info/      # Metadata (revision hashes)
+    ├── lua.revision
+    └── ...
+```
+
+## Verifying Your Setup
+
+After installation and configuration:
+
+<Steps>
+  <Step title="Check health">
+    Run `:checkhealth nvim-treesitter` to verify your installation.
+  </Step>
+  
+  <Step title="List installed parsers">
+    Use `:TSInstallInfo` to see all available and installed parsers.
+  </Step>
+  
+  <Step title="Test a parser">
+    Open a file in a supported language and check if syntax highlighting works.
+  </Step>
+</Steps>
+
+## Next Steps
+
+- [Install and manage parsers](/guides/parser-management)
+- [Enable highlighting, folds, and indents](/guides/enabling-features)
+- [Add custom parsers](/guides/custom-parsers)

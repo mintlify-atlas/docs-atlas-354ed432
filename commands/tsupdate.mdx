@@ -1,0 +1,116 @@
+---
+title: ':TSUpdate'
+description: Update installed treesitter parsers to the latest manifest revision
+---
+
+## Overview
+
+The `:TSUpdate` command updates installed parsers to the revision specified in the manifest if the installed version is older. This is a no-op if all specified parsers are already up to date.
+
+## Syntax
+
+```vim
+:TSUpdate [{language} ...]
+```
+
+<ParamField path="language" type="string">
+  Optional. One or more language names to update. Can be:
+  - Specific language names (e.g., `rust`, `javascript`, `python`)
+  - Language tiers (`stable`, `unstable`)
+  - If omitted, updates **all installed parsers**
+</ParamField>
+
+## Behavior
+
+- Updates parsers only if the manifest revision is newer than the installed version
+- If no languages are specified, updates all installed parsers
+- Update is **asynchronous** by default
+- The command is a no-op if parsers are already at the latest version
+- Tab completion shows installed parsers
+
+<Note>
+  It is recommended to add `:TSUpdate` as a build step in your plugin manager configuration to keep parsers automatically updated.
+</Note>
+
+## Examples
+
+### Update all installed parsers
+
+```vim
+:TSUpdate
+```
+
+Updates every parser that was previously installed.
+
+### Update specific languages
+
+```vim
+:TSUpdate rust javascript
+```
+
+Updates only the Rust and JavaScript parsers if newer versions are available.
+
+### Update all stable parsers
+
+```vim
+:TSUpdate stable
+```
+
+Updates all parsers in the stable tier.
+
+## Plugin Manager Integration
+
+Add `:TSUpdate` to your plugin manager's build/post-install hook:
+
+### lazy.nvim
+
+```lua
+{
+  'nvim-treesitter/nvim-treesitter',
+  build = ':TSUpdate',
+}
+```
+
+### packer.nvim
+
+```lua
+use {
+  'nvim-treesitter/nvim-treesitter',
+  run = ':TSUpdate',
+}
+```
+
+### vim-plug
+
+```vim
+Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+```
+
+## Synchronous Usage (Lua API)
+
+For synchronous updates in scripts (e.g., bootstrapping), use the Lua API:
+
+```lua
+require('nvim-treesitter').update():wait(300000)  -- max 5 minutes
+```
+
+## Related Commands
+
+- `:TSInstall` - Install new parsers
+- `:TSUninstall` - Remove installed parsers
+- `:TSLog` - View update operation logs
+
+## Source Implementation
+
+Implemented in `plugin/nvim-treesitter.lua:53-60`:
+
+```lua
+api.nvim_create_user_command('TSUpdate', function(args)
+  require('nvim-treesitter.install').update(args.fargs, { summary = true })
+end, {
+  nargs = '*',
+  bar = true,
+  complete = complete_installed_parsers,
+  desc = 'Update installed treesitter parsers',
+})
+```

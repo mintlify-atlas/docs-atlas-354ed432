@@ -1,0 +1,141 @@
+---
+title: Contributing Overview
+description: Guidelines for contributing to nvim-treesitter, including parsers and queries
+---
+
+# Contributing to nvim-treesitter
+
+The main parts of `nvim-treesitter` are:
+- A curated list of **parsers** for various programming languages
+- A collection of **queries** that enable tree-sitter features in Neovim
+
+## Prerequisites
+
+Before contributing, we recommend familiarizing yourself with:
+
+- [Tree-sitter documentation](https://tree-sitter.github.io/tree-sitter/) - Understanding how tree-sitter works
+- [Neovim's tree-sitter documentation](https://neovim.io/doc/user/treesitter.html#treesitter) - Neovim-specific implementation details
+
+## Getting Help
+
+There are dedicated Matrix channels for questions and general help:
+
+- [#nvim-treesitter](https://matrix.to/#/#nvim-treesitter:matrix.org) - Questions specific to Neovim's implementation and the queries
+- [#tree-sitter](https://matrix.to/#/#tree-sitter-chat:matrix.org) - General tree-sitter questions and CLI usage
+
+## What Can You Contribute?
+
+### Parsers
+
+Add support for new languages by registering parsers that meet the inclusion criteria. See [Adding Parsers](/contributing/adding-parsers) for detailed instructions.
+
+### Queries
+
+Improve or create queries for:
+
+- **highlights.scm** - Syntax highlighting
+- **injections.scm** - Multi-language support
+- **folds.scm** - Code folding
+- **indents.scm** - Automatic indentation (experimental)
+- **locals.scm** - Scope tracking (limited support)
+
+See [Writing Queries](/contributing/writing-queries) for guidelines.
+
+## Development Workflow
+
+<Steps>
+  <Step title="Fork and Clone">
+    Fork the repository and clone it locally:
+    
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/nvim-treesitter.git
+    cd nvim-treesitter
+    ```
+  </Step>
+
+  <Step title="Make Changes">
+    Make your changes to parsers or queries following the guidelines in the respective sections.
+  </Step>
+
+  <Step title="Test Locally">
+    Use the testing tools to verify your changes work correctly. See [Testing](/contributing/testing) for details.
+  </Step>
+
+  <Step title="Submit Pull Request">
+    Open a pull request with a clear description of your changes.
+  </Step>
+</Steps>
+
+## Quality Standards
+
+### For Parsers
+
+<Warning>
+  All parsers must:
+  - Correspond to a filetype detected by Neovim (nightly)
+  - Be feature complete, tested, and actively maintained
+  - Be hosted or mirrored on GitHub
+  - Be covered by CI using [upstream workflows](https://github.com/tree-sitter/workflows)
+  - Provide reference queries covered by a `ts_query_ls` workflow
+  - Support the latest ABI (if `src/parser.c` exists)
+  - Contain an up-to-date `src/grammar.json` (if no `src/parser.c`)
+  - Use C99 for external scanners
+</Warning>
+
+### For Queries
+
+- Follow standard formatting (2 spaces per nesting level, one node per line)
+- Use only valid captures for Neovim (different from Helix or other editors)
+- Ensure patterns are valid for the parser version in nvim-treesitter
+- Run `make query` before submitting (formats, lints, and checks)
+
+## Tools and Commands
+
+The following commands are available for development:
+
+```bash
+# Lua code quality
+make formatlua    # Format Lua code with StyLua
+make checklua     # Check Lua code with lua-language-server
+
+# Query management
+make formatquery  # Format all queries
+make lintquery    # Lint queries for valid captures
+make checkquery   # Check queries against installed parsers
+make query        # Run all query checks (format + lint + check)
+
+# Documentation
+make docs         # Update SUPPORTED_LANGUAGES.md
+
+# Testing
+make tests        # Run all tests
+```
+
+## Parser Tiers
+
+nvim-treesitter uses a two-tier system:
+
+### Tier 1 (Preferred)
+
+Tier 1 parsers provide the best stability and are **strongly recommended** for new additions:
+
+- Make regular releases following semantic versioning:
+  - **Patch** - Fixes not affecting queries
+  - **Minor** - New nodes or patterns
+  - **Major** - Removed nodes or breaking changes
+- Provide WASM release artifacts
+- Meet all general parser requirements
+
+### Tier 2
+
+Tier 2 parsers track the latest commit instead of versioned releases. While acceptable, they may cause breaking changes without notice.
+
+## Code of Conduct
+
+Be respectful and constructive in all interactions. We're building tools to help developers, and positive collaboration makes better software.
+
+## Next Steps
+
+- [Add a new parser](/contributing/adding-parsers)
+- [Write or improve queries](/contributing/writing-queries)
+- [Learn about testing](/contributing/testing)

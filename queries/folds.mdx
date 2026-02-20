@@ -1,0 +1,400 @@
+---
+title: Fold Queries
+description: Define code folding regions using Tree-sitter queries in Neovim
+---
+
+Fold queries define regions of code that can be folded (collapsed) in your editor. This feature is implemented in Neovim and can be enabled with Tree-sitter-based folding.
+
+## Enabling Folds
+
+To enable Tree-sitter-based folding, put the following in your `ftplugin` or `FileType` autocommand:
+
+```lua
+vim.wo[0][0].foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+vim.wo[0][0].foldmethod = 'expr'
+```
+
+## Valid Captures
+
+<ParamField path="@fold" type="capture">
+  The only valid capture for fold queries. Marks a node as foldable.
+</ParamField>
+
+## Basic Structure
+
+Fold queries are simple - just capture nodes that should be foldable:
+
+```query
+(function_definition) @fold
+(class_definition) @fold
+(if_statement) @fold
+```
+
+## Valid Fold Candidates
+
+Folds should be given to nodes with defined start and end delimiters/patterns, or to consecutive nodes which are part of the same conceptual "grouping".
+
+### Good Fold Candidates
+
+- **Function/method definitions** - Complete function bodies
+- **Class/interface/trait definitions** - Class bodies with members
+- **Switch/match statements** - Including individual match arms
+- **Execution blocks** - Conditional statements, loops
+- **Parameter/argument lists** - Multi-line function parameters
+- **Array/object/string expressions** - Literal collections
+- **Consecutive import statements** - Groups of imports
+- **Consecutive line comments** - Comment blocks
+
+### Invalid Fold Candidates
+
+<Warning>
+These items should NOT be folded:
+- Multiline assignment statements
+- Multiline property access expressions
+- Individual statements without clear block structure
+</Warning>
+
+## Guidelines by Construct
+
+As a rule of thumb, these highlight captures usually indicate nearby foldable structures:
+
+- `@function`, `@function.method` - Function and method bodies
+- `@keyword.import` - Import statement groups
+- `@keyword.conditional`, `@keyword.repeat` - Control flow blocks
+- `@comment`, `@comment.documentation` - Comment blocks
+- `@string`, `@string.documentation` - Multi-line strings
+- `@markup.heading.x`, `@markup.list` - Markup structure
+
+## Real-World Examples
+
+### Python Folds
+
+```query
+[
+  (function_definition)
+  (class_definition)
+  (while_statement)
+  (for_statement)
+  (if_statement)
+  (with_statement)
+  (try_statement)
+  (match_statement)
+  (import_from_statement)
+  (parameters)
+  (argument_list)
+  (parenthesized_expression)
+  (generator_expression)
+  (list_comprehension)
+  (set_comprehension)
+  (dictionary_comprehension)
+  (tuple)
+  (list)
+  (set)
+  (dictionary)
+  (string)
+] @fold
+
+; Fold consecutive imports together
+[
+  (import_statement)
+  (import_from_statement)
+]+ @fold
+```
+
+### JavaScript/TypeScript Folds
+
+```query
+[
+  (function_declaration)
+  (arrow_function)
+  (class_declaration)
+  (method_definition)
+  (if_statement)
+  (switch_statement)
+  (for_statement)
+  (while_statement)
+  (try_statement)
+  (object)
+  (array)
+  (template_string)
+  (parenthesized_expression)
+] @fold
+
+; JSX elements
+(jsx_element) @fold
+(jsx_self_closing_element) @fold
+
+; Consecutive imports
+[
+  (import_statement)
+  (export_statement)
+]+ @fold
+```
+
+### Rust Folds
+
+```query
+[
+  (function_item)
+  (struct_item)
+  (enum_item)
+  (impl_item)
+  (trait_item)
+  (mod_item)
+  (match_expression)
+  (if_expression)
+  (while_expression)
+  (for_expression)
+  (loop_expression)
+  (block)
+  (use_declaration)
+  (macro_definition)
+  (parameters)
+  (arguments)
+  (array_expression)
+  (field_declaration_list)
+  (field_initializer_list)
+  (enum_variant_list)
+] @fold
+
+; Consecutive use statements
+(use_declaration)+ @fold
+```
+
+### C/C++ Folds
+
+```query
+[
+  (function_definition)
+  (struct_specifier)
+  (enum_specifier)
+  (class_specifier)
+  (namespace_definition)
+  (if_statement)
+  (switch_statement)
+  (case_statement)
+  (for_statement)
+  (while_statement)
+  (do_statement)
+  (compound_statement)
+  (initializer_list)
+  (parameter_list)
+  (argument_list)
+  (comment)
+] @fold
+
+; Fold consecutive preprocessor directives
+[
+  (preproc_include)
+  (preproc_def)
+]+ @fold
+```
+
+### Lua Folds
+
+```query
+[
+  (function_declaration)
+  (function_definition)
+  (if_statement)
+  (for_statement)
+  (while_statement)
+  (repeat_statement)
+  (do_statement)
+  (table_constructor)
+  (arguments)
+  (parameters)
+  (comment)
+] @fold
+```
+
+### Go Folds
+
+```query
+[
+  (function_declaration)
+  (method_declaration)
+  (type_declaration)
+  (interface_type)
+  (struct_type)
+  (if_statement)
+  (for_statement)
+  (switch_statement)
+  (select_statement)
+  (type_switch_statement)
+  (communication_case)
+  (block)
+  (literal_value)
+  (parameter_list)
+  (argument_list)
+  (field_declaration_list)
+] @fold
+
+; Consecutive imports
+(import_declaration)+ @fold
+```
+
+### HTML/XML Folds
+
+```query
+[
+  (element)
+  (script_element)
+  (style_element)
+  (comment)
+] @fold
+```
+
+### Markdown Folds
+
+```query
+[
+  (section)
+  (fenced_code_block)
+  (list)
+  (list_item)
+] @fold
+
+; Fold by heading level
+(atx_heading
+  (atx_h1_marker)) @fold
+
+(atx_heading
+  (atx_h2_marker)) @fold
+```
+
+### JSON/YAML Folds
+
+```query
+; JSON
+[
+  (object)
+  (array)
+] @fold
+
+; YAML
+[
+  (block_mapping)
+  (block_sequence)
+  (flow_mapping)
+  (flow_sequence)
+] @fold
+```
+
+## Consecutive Node Folding
+
+Use the `+` quantifier to fold consecutive nodes of the same type:
+
+```query
+; Fold multiple consecutive imports together
+[
+  (import_statement)
+  (import_from_statement)
+]+ @fold
+
+; Fold consecutive line comments
+(comment)+ @fold
+
+; Fold consecutive variable declarations
+(variable_declaration)+ @fold
+```
+
+This is useful for:
+- Import blocks
+- Comment blocks
+- Consecutive variable declarations
+- Consecutive type definitions
+- Sequential configuration entries
+
+## Advanced Patterns
+
+### Conditional Folds
+
+Sometimes you only want to fold nodes that meet certain criteria:
+
+```query
+; Only fold multi-line strings
+((string) @fold
+  (#lua-match? @fold "\n"))
+
+; Only fold functions with bodies
+((function_definition
+  body: (block)) @fold)
+```
+
+### Nested Folds
+
+Tree-sitter handles nested folds automatically. Just capture both the parent and child:
+
+```query
+(class_definition) @fold    ; Folds the entire class
+(method_definition) @fold   ; Also folds individual methods
+```
+
+### Excluding Nodes
+
+If you need to exclude certain patterns:
+
+```query
+; Fold all blocks except empty ones
+((block) @fold
+  (#not-lua-match? @fold "^{%s*}$"))
+```
+
+## Best Practices
+
+1. **Be specific** - Only fold meaningful code regions
+2. **Consider context** - What users would want to collapse
+3. **Test interactively** - Use `:InspectTree` to verify your patterns
+4. **Group related items** - Use `+` for consecutive imports, comments, etc.
+5. **Match the language** - Follow the language's natural structure
+
+## Testing Folds
+
+To test your fold queries:
+
+1. Enable Tree-sitter folding (see [Enabling Folds](#enabling-folds))
+2. Use `:InspectTree` to verify nodes are captured correctly
+3. Use `:EditQuery folds` to test patterns interactively
+4. Test fold commands:
+   - `zc` - Close fold under cursor
+   - `zo` - Open fold under cursor
+   - `za` - Toggle fold
+   - `zM` - Close all folds
+   - `zR` - Open all folds
+
+## Common Issues
+
+<Warning>
+**Fold includes too much/too little**
+
+Make sure you're capturing the complete node. Use `:InspectTree` to identify the exact node boundaries.
+</Warning>
+
+<Warning>
+**Folds not appearing**
+
+Verify that:
+- Tree-sitter folding is enabled (check `foldmethod` and `foldexpr`)
+- The parser is installed with `:TSInstall <language>`
+- Your patterns match actual nodes in the tree
+</Warning>
+
+<Note>
+Folds are a user-facing feature. Consider the editing experience - what would be helpful to collapse while reading or navigating code?
+</Note>
+
+## Formatting
+
+All queries should follow standard formatting (two-space indentation, one node per line). Format your queries with:
+
+```bash
+make formatquery
+```
+
+To preserve specific formatting for a node, use:
+
+```query
+; format-ignore
+(complex_pattern) @fold
+```

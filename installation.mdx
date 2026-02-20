@@ -1,0 +1,467 @@
+---
+title: Installation
+description: Detailed installation guide for nvim-treesitter with all package managers, configuration options, and troubleshooting
+---
+
+## Prerequisites
+
+Before installing nvim-treesitter, verify you have the required dependencies.
+
+### Neovim version
+
+Check your Neovim version:
+
+```bash
+nvim --version
+```
+
+You need **Neovim 0.11.0 or later**. The plugin supports:
+
+- The latest [stable release](https://github.com/neovim/neovim/releases/tag/stable)
+- The latest [nightly prerelease](https://github.com/neovim/neovim/releases/tag/nightly)
+
+<Warning>
+  Older versions are not supported. Compatibility with Neovim 0.X is typically removed after the release of Neovim 0.(X+1).1.
+</Warning>
+
+### System dependencies
+
+Install these tools on your system:
+
+<CodeGroup>
+
+```bash Ubuntu/Debian
+sudo apt install tar curl build-essential
+cargo install tree-sitter-cli
+```
+
+```bash macOS
+brew install tar curl tree-sitter
+# Xcode command line tools provide the C compiler
+xcode-select --install
+```
+
+```bash Arch Linux
+sudo pacman -S tar curl base-devel tree-sitter
+```
+
+```bash Fedora
+sudo dnf install tar curl gcc tree-sitter-cli
+```
+
+</CodeGroup>
+
+<Note>
+  `tree-sitter-cli` version 0.26.1 or later is required. Check with `tree-sitter --version`.
+</Note>
+
+## Install the plugin
+
+Choose your package manager below:
+
+### lazy.nvim (recommended)
+
+Add to your `~/.config/nvim/lua/plugins/treesitter.lua`:
+
+```lua
+return {
+  'nvim-treesitter/nvim-treesitter',
+  lazy = false,
+  build = ':TSUpdate',
+}
+```
+
+<Tip>
+  The `build = ':TSUpdate'` option automatically updates parsers when the plugin is installed or updated.
+</Tip>
+
+For more control, you can configure installation in the spec:
+
+```lua
+return {
+  'nvim-treesitter/nvim-treesitter',
+  lazy = false,
+  build = ':TSUpdate',
+  config = function()
+    -- Optional: configure installation directory
+    require('nvim-treesitter').setup({
+      install_dir = vim.fn.stdpath('data') .. '/site',
+    })
+    
+    -- Install your preferred parsers
+    require('nvim-treesitter').install({ 'lua', 'vim', 'vimdoc' })
+  end,
+}
+```
+
+### packer.nvim
+
+Add to your `~/.config/nvim/lua/plugins.lua`:
+
+```lua
+use {
+  'nvim-treesitter/nvim-treesitter',
+  run = function()
+    require('nvim-treesitter.install').update({ with_sync = true })
+  end,
+}
+```
+
+### rocks.nvim
+
+Install from the command line:
+
+```vim
+:Rocks install nvim-treesitter
+```
+
+Then in your config:
+
+```lua
+require('nvim-treesitter').install({ 'lua', 'python', 'rust' })
+```
+
+### vim-plug
+
+Add to your `~/.config/nvim/init.vim` or `~/.vimrc`:
+
+```vim
+Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+```
+
+Or in `init.lua`:
+
+```lua
+vim.cmd [[
+  Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+]]
+```
+
+### Native packages
+
+Neovim has built-in package management:
+
+```bash
+mkdir -p ~/.local/share/nvim/site/pack/plugins/start
+cd ~/.local/share/nvim/site/pack/plugins/start
+git clone https://github.com/nvim-treesitter/nvim-treesitter.git
+```
+
+Then in Neovim:
+
+```vim
+:TSUpdate
+```
+
+<Warning>
+  **Do not lazy-load nvim-treesitter.** The plugin must load at startup to properly register parsers on the runtimepath.
+</Warning>
+
+## Configuration
+
+Call `setup()` to customize installation options:
+
+```lua
+require('nvim-treesitter').setup({
+  -- Directory to install parsers and queries to
+  -- Defaults to stdpath('data')/site
+  install_dir = vim.fn.stdpath('data') .. '/site',
+})
+```
+
+<Note>
+  **You do not need to call `setup()`** for nvim-treesitter to work with default values. Only call it if you want to customize the installation directory.
+</Note>
+
+The `install_dir` is prepended to your `runtimepath` to give installed parsers priority over other sources.
+
+## Installing parsers
+
+### Via commands
+
+The most straightforward way is using commands:
+
+```vim
+:TSInstall rust javascript python
+```
+
+Available options:
+
+- `:TSInstall <language>` - Install specific language parser(s)
+- `:TSInstall!` - Force reinstall even if already installed
+- `:TSInstall stable` - Install all stable tier parsers
+- `:TSInstall unstable` - Install all unstable tier parsers (not recommended)
+
+### Via Lua API
+
+In your `init.lua`:
+
+```lua
+-- Asynchronous installation (non-blocking)
+require('nvim-treesitter').install({ 'rust', 'javascript', 'python' })
+
+-- Synchronous installation (blocks until complete)
+require('nvim-treesitter').install({ 'rust', 'javascript', 'python' }):wait(300000)
+```
+
+The `install()` function accepts options:
+
+```lua
+require('nvim-treesitter').install({ 'rust', 'go' }, {
+  force = true,         -- Reinstall even if already present
+  generate = false,     -- Generate parser.c from grammar
+  max_jobs = 4,         -- Limit concurrent compilation jobs
+  summary = true,       -- Print summary after completion
+})
+```
+
+### Generating from grammar
+
+Some parsers may need regeneration from source:
+
+```vim
+:TSInstallFromGrammar rust
+```
+
+This regenerates `parser.c` from `grammar.json` or `grammar.js` before compiling.
+
+<Tip>
+  Use this if a parser uses an outdated ABI that's incompatible with your Neovim version.
+</Tip>
+
+## Updating parsers
+
+Keep parsers synchronized with the plugin:
+
+```vim
+:TSUpdate
+```
+
+This updates all installed parsers to match the revisions in the plugin's manifest.
+
+Update specific parsers:
+
+```vim
+:TSUpdate rust python
+```
+
+Via Lua:
+
+```lua
+-- Update all installed parsers
+require('nvim-treesitter').update()
+
+-- Update specific parsers
+require('nvim-treesitter').update({ 'rust', 'python' })
+
+-- Update synchronously
+require('nvim-treesitter').update():wait(300000)
+```
+
+<Warning>
+  **Always run `:TSUpdate` after upgrading nvim-treesitter.** Parser versions must match the plugin version to ensure compatibility.
+</Warning>
+
+## Managing parsers
+
+### List installed parsers
+
+Via Lua:
+
+```vim
+:lua print(vim.inspect(require('nvim-treesitter').get_installed()))
+```
+
+Via health check:
+
+```vim
+:checkhealth nvim-treesitter
+```
+
+### List available parsers
+
+```vim
+:lua print(vim.inspect(require('nvim-treesitter').get_available()))
+```
+
+Filter by tier:
+
+```lua
+-- 1 = stable, 2 = unstable, 3 = unmaintained, 4 = unsupported
+local stable_parsers = require('nvim-treesitter').get_available(1)
+print(vim.inspect(stable_parsers))
+```
+
+### Uninstall parsers
+
+```vim
+:TSUninstall python javascript
+```
+
+Or in Lua:
+
+```lua
+require('nvim-treesitter').uninstall({ 'python', 'javascript' })
+```
+
+### View installation logs
+
+If installation fails, check the logs:
+
+```vim
+:TSLog
+```
+
+This shows all messages from install, update, and uninstall operations.
+
+## Enabling features
+
+Installing parsers alone doesn't enable features. You must activate them per filetype.
+
+### Syntax highlighting
+
+```lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'rust', 'javascript', 'python' },
+  callback = function()
+    vim.treesitter.start()
+  end,
+})
+```
+
+### Code folding
+
+```lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'rust', 'javascript', 'python' },
+  callback = function()
+    vim.wo[0][0].foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+    vim.wo[0][0].foldmethod = 'expr'
+  end,
+})
+```
+
+### Indentation (experimental)
+
+```lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'rust', 'javascript', 'python' },
+  callback = function()
+    vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+  end,
+})
+```
+
+<Note>
+  Note the specific quotes in `"v:lua.require'nvim-treesitter'.indentexpr()"` - these are required for proper evaluation.
+</Note>
+
+### All-in-one configuration
+
+```lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'rust', 'javascript', 'python', 'lua', 'go' },
+  callback = function()
+    -- Highlighting
+    vim.treesitter.start()
+    
+    -- Folding
+    vim.wo[0][0].foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+    vim.wo[0][0].foldmethod = 'expr'
+    
+    -- Indentation (experimental)
+    vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+  end,
+})
+```
+
+## Troubleshooting
+
+### Parser compilation fails
+
+If you see compilation errors:
+
+1. Verify you have a C compiler:
+   ```bash
+   gcc --version  # or clang --version
+   ```
+
+2. Check tree-sitter-cli version:
+   ```bash
+   tree-sitter --version  # Must be 0.26.1+
+   ```
+
+3. Try reinstalling with force:
+   ```vim
+   :TSInstall! rust
+   ```
+
+4. Try generating from grammar:
+   ```vim
+   :TSInstallFromGrammar rust
+   ```
+
+### Parser not found
+
+If Neovim can't find an installed parser:
+
+1. Check the parser is installed:
+   ```vim
+   :checkhealth nvim-treesitter
+   ```
+
+2. Verify your installation directory is on the runtimepath:
+   ```vim
+   :set runtimepath?
+   ```
+
+3. Try reinstalling:
+   ```vim
+   :TSUninstall rust
+   :TSInstall rust
+   ```
+
+### Highlighting not working
+
+If syntax highlighting doesn't activate:
+
+1. Ensure you've called `vim.treesitter.start()`
+
+2. Check the language has highlighting queries:
+   ```vim
+   :checkhealth nvim-treesitter
+   ```
+
+3. Verify the parser loaded correctly:
+   ```vim
+   :lua print(vim.treesitter.language.inspect('rust'))
+   ```
+
+### Getting help
+
+For issues not covered here:
+
+1. Run health check: `:checkhealth nvim-treesitter`
+2. Check installation logs: `:TSLog`
+3. Search [existing issues](https://github.com/nvim-treesitter/nvim-treesitter/issues)
+4. Open a new issue with health check output and logs
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Commands reference" icon="terminal" href="/commands/tsinstall">
+    Complete list of all available commands and their options
+  </Card>
+  
+  <Card title="API reference" icon="code" href="/api/setup">
+    Lua API documentation for programmatic parser management
+  </Card>
+  
+  <Card title="Custom parsers" icon="puzzle-piece" href="/guides/custom-parsers">
+    Add parsers not in the default list
+  </Card>
+  
+  <Card title="Custom queries" icon="file-code" href="/guides/custom-queries">
+    Write your own highlighting and folding queries
+  </Card>
+</CardGroup>

@@ -1,0 +1,122 @@
+---
+title: "uninstall()"
+description: "Remove installed parsers and queries"
+---
+
+## uninstall(languages, opts)
+
+Remove the parser and queries for the specified language(s). This deletes both the compiled parser library and the associated query files from the installation directory.
+
+<Warning>
+This operation is destructive and cannot be undone. The parser and queries will need to be reinstalled if needed again.
+</Warning>
+
+### Parameters
+
+<ParamField path="languages" type="string|string[]" required>
+  Language(s) to uninstall. Can be:
+  - A single language name (e.g., `"rust"`)
+  - An array of language names (e.g., `{ "rust", "javascript" }`)
+  - A tier name: `"stable"`, `"unstable"`, or `"all"` to uninstall all parsers
+  
+  Only parsers installed via nvim-treesitter will be uninstalled.
+</ParamField>
+
+<ParamField path="opts" type="table" optional>
+  Uninstall options
+  
+  <Expandable title="properties">
+    <ParamField path="summary" type="boolean" default="false">
+      Print a summary of successful and total operations when uninstalling multiple languages.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+This function does not return a value (returns `nil`).
+
+<Note>
+This function is asynchronous but does not return an awaitable object like `install()` and `update()`.
+</Note>
+
+### Usage
+
+#### Uninstall a Single Parser
+
+```lua
+require('nvim-treesitter').uninstall('rust')
+```
+
+#### Uninstall Multiple Parsers
+
+```lua
+require('nvim-treesitter').uninstall({ 'rust', 'javascript', 'python' })
+```
+
+#### Uninstall All Parsers
+
+```lua
+require('nvim-treesitter').uninstall('all')
+```
+
+#### Uninstall with Summary
+
+```lua
+require('nvim-treesitter').uninstall(
+  { 'lua', 'vim', 'python' },
+  { summary = true }
+)
+```
+
+### Uninstall Process
+
+For each language, the function:
+
+1. **Verify**: Checks if the parser is managed by nvim-treesitter
+2. **Remove Parser**: Deletes the compiled parser library (`.so` file) from the `parser/` directory
+3. **Remove Queries**: Deletes query files from the `queries/` directory (handles both symlinks and regular directories)
+4. **Cleanup**: Removes parser metadata from `parser-info/`
+
+### Behavior Details
+
+- Parser dependencies are **not** automatically uninstalled (to prevent breaking other parsers that might depend on them)
+- If a parser is not found or not managed by nvim-treesitter, a warning is logged
+- Query directories are handled differently based on their type:
+  - **Symlinks**: Simply unlinked
+  - **Directories**: Recursively removed with all contents
+
+<Info>
+Only parsers installed in nvim-treesitter's configured installation directory are affected. Parsers installed system-wide or via other methods are ignored.
+</Info>
+
+### Verification
+
+To check which parsers are managed by nvim-treesitter and can be uninstalled:
+
+```lua
+local installed = require('nvim-treesitter').get_installed()
+print(vim.inspect(installed))
+```
+
+<Note>
+Parsers installed from other sources or placed anywhere else on `runtimepath` will not be listed by `get_installed()` and cannot be uninstalled via this function.
+</Note>
+
+### Warnings
+
+You'll see a warning if you try to uninstall a parser that is:
+- Not installed
+- Not managed by nvim-treesitter
+- Installed from a different source
+
+Example warning message:
+```
+Parser for <language> is not managed by nvim-treesitter
+```
+
+### See Also
+
+- [install()](/api/install) - Install new parsers
+- [update()](/api/update) - Update installed parsers
+- [get_installed()](/api/utilities) - List installed parsers

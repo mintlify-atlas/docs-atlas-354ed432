@@ -1,0 +1,59 @@
+---
+title: "setup()"
+description: "Configure nvim-treesitter installation options"
+---
+
+## setup(opts)
+
+Configure installation options for nvim-treesitter. This function should be called before any installation operations if you want to customize the installation directory.
+
+<Note>
+You only need to call `setup()` if you want to set non-default options. The plugin works out of the box with sensible defaults.
+</Note>
+
+### Parameters
+
+<ParamField path="opts" type="table" optional>
+  Configuration options table
+  
+  <Expandable title="properties">
+    <ParamField path="install_dir" type="string" optional>
+      Directory to install parsers and queries to. Defaults to `stdpath('data')/site/`. 
+      
+      This directory will be automatically prepended to Neovim's `runtimepath` to make parsers and queries available.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+This function does not return a value.
+
+### Usage
+
+```lua
+require('nvim-treesitter').setup {
+  -- Install parsers to a custom directory
+  install_dir = "/some/path/to/store/parsers",
+}
+```
+
+### Default Configuration
+
+By default, parsers and queries are installed to:
+
+```lua
+vim.fn.stdpath('data') .. '/site'
+```
+
+### Implementation Details
+
+The setup function performs the following operations:
+
+1. Normalizes the provided `install_dir` path
+2. Prepends the directory to Neovim's `runtimepath` 
+3. Merges user configuration with default settings using deep extend
+
+<Warning>
+The `install_dir` must be set before calling any installation functions like `install()`, `update()`, or `uninstall()`.
+</Warning>

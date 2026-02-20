@@ -1,0 +1,118 @@
+---
+title: Introduction to nvim-treesitter
+description: A powerful plugin for installing Tree-sitter parsers, managing queries, and enabling advanced syntax features in Neovim
+---
+
+<img src="https://github.com/nvim-treesitter/nvim-treesitter/assets/2361214/0513b223-c902-4f12-92ee-8ac4d8d6f41f" alt="nvim-treesitter" />
+
+## What is nvim-treesitter?
+
+The `nvim-treesitter` plugin provides three core capabilities for Neovim:
+
+1. **Parser management**: Functions for installing, updating, and removing [Tree-sitter parsers](https://tree-sitter.github.io/tree-sitter/) for over 300 programming languages
+2. **Query collections**: Curated sets of queries that enable Tree-sitter features built into Neovim (highlighting, folding, indentation, injections)
+3. **Experimental features**: A staging ground for Tree-sitter-based functionality considered for upstreaming to Neovim core
+
+<Note>
+  This plugin focuses on parser and query management. The actual Tree-sitter features (like syntax highlighting) are built into Neovim itself.
+</Note>
+
+## Why use nvim-treesitter?
+
+Tree-sitter provides several advantages over traditional regex-based syntax:
+
+- **Accurate parsing**: Tree-sitter builds a complete syntax tree, understanding your code's structure
+- **Performance**: Incremental parsing means only changed portions are re-parsed
+- **Consistency**: The same parser powers highlighting, navigation, text objects, and more
+- **Language support**: Over 300 languages with actively maintained parsers
+
+## Key capabilities
+
+<CardGroup cols={2}>
+  <Card title="Syntax highlighting" icon="highlighter" href="/concepts/features">
+    Enable Tree-sitter-based syntax highlighting for rich, accurate code coloring
+  </Card>
+  
+  <Card title="Code folding" icon="code" href="/concepts/features">
+    Fold code blocks intelligently based on syntax structure
+  </Card>
+  
+  <Card title="Indentation" icon="indent" href="/concepts/features">
+    Experimental Tree-sitter-based automatic indentation
+  </Card>
+  
+  <Card title="Language injections" icon="layer-group" href="/concepts/features">
+    Support for multi-language documents like Markdown with code blocks
+  </Card>
+</CardGroup>
+
+## Quick example
+
+Here's how to install parsers and enable highlighting:
+
+```lua
+-- Install parsers for your languages
+require('nvim-treesitter').install({ 'rust', 'javascript', 'python' })
+
+-- Enable highlighting for specific filetypes
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'rust', 'javascript', 'python' },
+  callback = function()
+    vim.treesitter.start()
+  end,
+})
+```
+
+## Requirements
+
+Before installing nvim-treesitter, ensure you have:
+
+- **Neovim 0.11.0 or later** (nightly builds are supported)
+- **`tar` and `curl`** in your PATH for downloading parsers
+- **`tree-sitter-cli`** version 0.26.1 or later
+- **A C compiler** for building parsers from source
+
+<Warning>
+  The support policy covers only the latest stable and nightly releases of Neovim. Compatibility with older versions is not guaranteed.
+</Warning>
+
+## Supported languages
+
+The plugin supports parsers for over 300 languages, organized into tiers:
+
+- **Stable**: Follow semantic versioning for updates
+- **Unstable**: Track the HEAD of the parser repository
+- **Unmaintained**: No automatic updates available
+- **Unsupported**: Known to be broken
+
+For each language, nvim-treesitter may provide queries for:
+
+- **H**ighlights
+- **F**olds
+- **I**ndents
+- In**j**ections (language injections)
+- **L**ocals (definitions and references)
+
+<Tip>
+  Check the [supported languages list](https://github.com/nvim-treesitter/nvim-treesitter/blob/main/SUPPORTED_LANGUAGES.md) to see which features are available for your language.
+</Tip>
+
+## What's next?
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get up and running in under 5 minutes
+  </Card>
+  
+  <Card title="Installation" icon="download" href="/installation">
+    Detailed installation instructions for all package managers
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/guides/setup">
+    Learn about setup options and customization
+  </Card>
+  
+  <Card title="Commands" icon="terminal" href="/commands/tsinstall">
+    Reference for all available commands
+  </Card>
+</CardGroup>

@@ -1,0 +1,136 @@
+---
+title: ':TSLog'
+description: View log messages from parser installation, update, and uninstall operations
+---
+
+## Overview
+
+The `:TSLog` command displays all messages and output from previous parser operations, including installations, updates, and uninstalls. This is useful for debugging installation issues or reviewing operation history.
+
+## Syntax
+
+```vim
+:TSLog
+```
+
+The command takes no arguments.
+
+## Behavior
+
+- Opens a buffer displaying log messages from parser operations
+- Shows output from install, update, and uninstall commands
+- Includes compilation output, errors, and success messages
+- Logs persist across Neovim sessions
+
+<Note>
+  The log view is particularly helpful for diagnosing why a parser installation failed, as it includes full compiler output and error messages.
+</Note>
+
+## Use Cases
+
+### Debugging installation failures
+
+If `:TSInstall` fails silently or with minimal information:
+
+```vim
+:TSInstall rust
+" ... installation fails or completes with errors ...
+:TSLog
+```
+
+The log will show:
+- Compiler errors and warnings
+- Missing dependencies
+- Network issues during download
+- File system permission problems
+
+### Reviewing operation history
+
+Check what operations were performed:
+
+```vim
+:TSLog
+```
+
+View a history of:
+- Which parsers were installed and when
+- Update results for each parser
+- Uninstall confirmations
+
+### Verifying successful operations
+
+Confirm that batch operations completed successfully:
+
+```vim
+:TSInstall stable
+:TSLog  " Review results for all stable parsers
+```
+
+## Log Contents
+
+The log typically includes:
+
+- **Operation type**: Install, update, or uninstall
+- **Language names**: Which parsers were affected
+- **Timestamps**: When operations occurred
+- **Compilation output**: Compiler warnings and errors
+- **Network activity**: Download progress and failures
+- **Success/failure status**: Summary of results
+
+## Example Log Output
+
+```
+[INFO] Installing parser for rust
+[INFO] Downloading from https://github.com/tree-sitter/tree-sitter-rust
+[INFO] Compiling parser.c...
+[INFO] Successfully installed rust parser
+
+[ERROR] Installing parser for python
+[ERROR] Compilation failed: missing gcc
+[ERROR] Failed to install python parser
+
+[INFO] Updating javascript parser
+[INFO] Already up to date
+```
+
+## Troubleshooting with TSLog
+
+### Check for missing build tools
+
+Look for errors mentioning:
+- `gcc`, `clang`, or `cc` not found
+- Missing C compiler
+- Build tool configuration issues
+
+### Identify network issues
+
+Look for:
+- Connection timeout messages
+- Git clone failures
+- Download interruptions
+
+### Verify parser compatibility
+
+Check for:
+- ABI version mismatches
+- Neovim version requirements
+- Treesitter library compatibility
+
+## Related Commands
+
+- `:TSInstall` - Install parsers (generates logs)
+- `:TSUpdate` - Update parsers (generates logs)
+- `:TSUninstall` - Remove parsers (generates logs)
+- `:checkhealth nvim-treesitter` - Check parser status and configuration
+
+## Source Implementation
+
+Implemented in `plugin/nvim-treesitter.lua:71-75`:
+
+```lua
+api.nvim_create_user_command('TSLog', function()
+  require('nvim-treesitter.log').show()
+end, {
+  desc = 'View log messages',
+})
+```

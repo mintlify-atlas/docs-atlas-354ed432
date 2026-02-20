@@ -1,0 +1,312 @@
+---
+title: Tree-sitter parsers
+description: Understanding how tree-sitter parsers work and how nvim-treesitter manages them
+---
+
+Tree-sitter parsers are the foundation of nvim-treesitter. They convert source code into structured syntax trees that enable features like syntax highlighting, code folding, and intelligent navigation.
+
+## What is a tree-sitter parser?
+
+A tree-sitter parser is a language-specific library that analyzes source code and produces a concrete syntax tree (CST). Unlike traditional parsers, tree-sitter parsers are:
+
+- **Incremental**: They can reparse only the changed portions of a file
+- **Error-tolerant**: They produce useful trees even for syntactically invalid code
+- **Fast**: Parsing completes in milliseconds for most files
+
+<Info>
+Each parser is a compiled C library specific to one programming language. nvim-treesitter manages installation and updates for over 300 languages.
+</Info>
+
+## Parser installation
+
+nvim-treesitter provides multiple ways to install parsers:
+
+### Using `:TSInstall`
+
+The simplest method is the `:TSInstall` command:
+
+```vim
+:TSInstall rust javascript python
+```
+
+This downloads the parser source code, compiles it, and installs it to your configured directory.
+
+### Programmatic installation
+
+You can also install parsers from Lua:
+
+```lua
+require('nvim-treesitter').install({ 'rust', 'javascript', 'zig' })
+```
+
+<Note>
+This function runs asynchronously. For synchronous installation (e.g., in bootstrap scripts), use `:wait()`:
+
+```lua
+require('nvim-treesitter').install({ 'rust', 'javascript' }):wait(300000)
+```
+</Note>
+
+### Automatic updates
+
+It's recommended to automatically update parsers when upgrading nvim-treesitter. With lazy.nvim:
+
+```lua
+{
+  'nvim-treesitter/nvim-treesitter',
+  lazy = false,
+  build = ':TSUpdate'
+}
+```
+
+## Parser registry
+
+All supported parsers are defined in `lua/nvim-treesitter/parsers.lua`. Each entry contains:
+
+```lua
+rust = {
+  install_info = {
+    url = 'https://github.com/tree-sitter/tree-sitter-rust',
+    revision = 'v2.1.0',
+    -- Optional:
+    branch = 'main',
+    location = 'parser',  -- for monorepos
+    generate = true,      -- if no pre-generated parser.c
+  },
+  maintainers = { '@amaanq' },
+  tier = 2,  -- or tier = 1 for stable releases
+}
+```
+
+### Parser tiers
+
+nvim-treesitter uses a tiering system:
+
+<Tabs>
+  <Tab title="Tier 1 (Stable)">
+    **Preferred parsers** that:
+    - Follow semantic versioning
+    - Provide WASM release artifacts
+    - Track versioned releases instead of HEAD
+    - Have active maintenance
+    
+    Examples: `python`, `inko`, `wit`, `zsh`
+  </Tab>
+  
+  <Tab title="Tier 2 (Unstable)">
+    **Standard parsers** that:
+    - Track the latest commit (HEAD)
+    - May have breaking changes
+    - Cover most languages
+    
+    This is the default tier for most parsers.
+  </Tab>
+  
+  <Tab title="Tier 3 (Unmaintained)">
+    **Deprecated parsers** that:
+    - Lack active maintenance
+    - May have known issues
+    - No longer receive automatic updates
+  </Tab>
+</Tabs>
+
+## Parser requirements
+
+<Warning>
+To install parsers, you need:
+- `tar` and `curl` in your PATH
+- [`tree-sitter-cli`](https://github.com/tree-sitter/tree-sitter/blob/master/crates/cli/README.md) (version 0.26.1 or later)
+- A C compiler (see [cc crate requirements](https://docs.rs/cc/latest/cc/#compile-time-requirements))
+</Warning>
+
+### Parser qualification criteria
+
+For a parser to be included in nvim-treesitter, it must:
+
+1. Correspond to a filetype detected by Neovim
+2. Be hosted or mirrored on GitHub
+3. Be covered by CI using [upstream workflows](https://github.com/tree-sitter/workflows)
+4. Provide reference queries with validation
+5. Support the latest tree-sitter ABI
+6. Have external scanners written in C99 (if applicable)
+
+## Adding custom parsers
+
+You can register parsers not included in nvim-treesitter:
+
+```lua
+vim.api.nvim_create_autocmd('User', { 
+  pattern = 'TSUpdate',
+  callback = function()
+    require('nvim-treesitter.parsers').zimbu = {
+      install_info = {
+        url = 'https://github.com/zimbulang/tree-sitter-zimbu',
+        revision = 'v1.2.0',
+        branch = 'develop',      -- optional
+        location = 'parser',     -- optional
+        generate = true,         -- optional
+      },
+      maintainers = { '@me' },
+      tier = 2,
+    }
+  end
+})
+```
+
+<Accordion title="Using local parsers">
+For local development, use a `path` instead of `url`:
+
+```lua
+install_info = {
+  path = '~/parsers/tree-sitter-zimbu',
+  generate = true,
+}
+```
+
+This will always use the directory as-is, ignoring `branch` and `revision` fields.
+</Accordion>
+
+### Registering filetypes
+
+If the parser name differs from the Vim filetype:
+
+```lua
+vim.treesitter.language.register('zimbu', { 'zu', 'zbu' })
+```
+
+For custom filetype detection:
+
+```lua
+vim.filetype.add({
+  extension = {
+    zu = 'zimbu',
+  },
+  pattern = {
+    ['.*%.conf'] = 'zimbu',
+  },
+})
+```
+
+## Parser compilation
+
+When you install a parser, nvim-treesitter:
+
+1. **Downloads** the source from the specified URL/revision
+2. **Generates** `src/parser.c` (if `generate = true` or missing)
+3. **Compiles** the parser and scanner into a shared library
+4. **Installs** the `.so`/`.dll` file to your configured directory
+
+<Info>
+Parsers are installed to `{install_dir}/parser/{lang}.so` where `install_dir` defaults to `vim.fn.stdpath('data') .. '/site'`.
+</Info>
+
+## Working with parser source
+
+Some parsers require special handling:
+
+### Monorepo parsers
+
+For parsers in subdirectories:
+
+```lua
+install_info = {
+  url = 'https://github.com/tree-sitter-grammars/tree-sitter-csv',
+  location = 'csv',  -- parser is in csv/ subdirectory
+}
+```
+
+### Parsers requiring generation
+
+If a repository doesn't include `src/parser.c`:
+
+```lua
+install_info = {
+  url = 'https://github.com/example/tree-sitter-lang',
+  generate = true,  -- generates from src/grammar.json
+}
+```
+
+### External scanners
+
+<Warning>
+Parsers with external scanners must have them written in **C99**. External scanners in C++ or Rust are not supported.
+</Warning>
+
+## Parser dependencies
+
+Some languages require other parsers:
+
+```lua
+cpp = {
+  install_info = { ... },
+  requires = { 'c' },  -- C++ queries inherit from C
+}
+```
+
+When installing `cpp`, nvim-treesitter automatically installs the `c` parser first.
+
+## Checking parser health
+
+Verify your parser installation:
+
+```vim
+:checkhealth treesitter
+```
+
+This reports:
+- Installed parsers and their versions
+- Missing dependencies
+- Compilation errors
+- Query validation issues
+
+## Real-world examples
+
+Here are some actual parser configurations from nvim-treesitter:
+
+<Accordion title="Python (Tier 1)">
+```lua
+python = {
+  install_info = {
+    revision = 'v0.25.0',
+    url = 'https://github.com/tree-sitter/tree-sitter-python',
+  },
+  maintainers = { '@stsewd', '@theHamsta' },
+  tier = 1,
+}
+```
+</Accordion>
+
+<Accordion title="Angular (with dependencies)">
+```lua
+angular = {
+  install_info = {
+    revision = 'f0d0685701b70883fa2dfe94ee7dc27965cab841',
+    url = 'https://github.com/dlvandenberg/tree-sitter-angular',
+  },
+  maintainers = { '@dlvandenberg' },
+  requires = { 'html', 'html_tags' },
+  tier = 2,
+}
+```
+</Accordion>
+
+<Accordion title="CSV (monorepo)">
+```lua
+csv = {
+  install_info = {
+    location = 'csv',
+    revision = 'f6bf6e35eb0b95fbadea4bb39cb9709507fcb181',
+    url = 'https://github.com/tree-sitter-grammars/tree-sitter-csv',
+  },
+  maintainers = { '@amaanq' },
+  requires = { 'tsv' },
+  tier = 2,
+}
+```
+</Accordion>
+
+## Next steps
+
+Now that you understand parsers, learn about:
+- [Queries](/concepts/queries) - How to use tree-sitter queries for highlighting and more
+- [Features](/concepts/features) - The features enabled by parsers and queries

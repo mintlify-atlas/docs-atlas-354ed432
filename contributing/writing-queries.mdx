@@ -1,0 +1,502 @@
+---
+title: Writing Queries
+description: Guidelines for writing and maintaining tree-sitter queries for nvim-treesitter
+---
+
+# Writing Queries
+
+Queries are pattern-matching files that enable tree-sitter features in Neovim. This guide covers how to write and maintain queries for nvim-treesitter.
+
+## Query Types
+
+Create the following query files in `runtime/queries/<language>/`:
+
+- **highlights.scm** - Syntax highlighting (most common)
+- **injections.scm** - Multi-language document support
+- **folds.scm** - Code folding regions
+- **indents.scm** - Automatic indentation (experimental)
+- **locals.scm** - Scope tracking (limited backward compatibility)
+
+## Prerequisites
+
+Before writing queries, familiarize yourself with:
+
+- [Tree-sitter query language](https://tree-sitter.github.io/tree-sitter/using-parsers/queries/index.html) - Basic query syntax
+- [Neovim's tree-sitter documentation](https://neovim.io/doc/user/treesitter.html#treesitter) - Neovim-specific features
+
+<Warning>
+  The valid captures in Neovim are **different** from other editors like Helix. You cannot copy queries directly from parser repositories or other editors. Use the capture lists in this guide.
+</Warning>
+
+## Development Tools
+
+The following tools help when writing queries:
+
+### ts_query_ls
+
+[ts_query_ls](https://github.com/ribru17/ts_query_ls) is a language server for tree-sitter queries that provides:
+
+- Validation of query syntax
+- Autocompletion for captures and node types
+- Formatting
+- Offline linting via `make lintquery`, `make checkquery`, `make formatquery`
+
+### Neovim Commands
+
+- **`:InspectTree`** - Shows the parsed tree for a buffer and highlights corresponding text
+- **`:EditQuery`** - Opens a playground to write patterns and see captures in real-time
+- **`:Inspect`** - Shows which highlight groups are applied at cursor position
+
+## Query Validation
+
+Before submitting queries, run:
+
+```bash
+make query  # Runs format + lint + check
+```
+
+Or individually:
+
+```bash
+make formatquery  # Format queries to standard style
+make lintquery    # Validate captures are correct for Neovim
+make checkquery   # Verify patterns match installed parsers
+```
+
+<Warning>
+  `make checkquery` requires the parser to be installed in the default directory through nvim-treesitter. Install it via `:TSInstall <language>` first.
+</Warning>
+
+## Formatting Standards
+
+All queries must follow standard formatting:
+
+- One node per line
+- Two spaces per nesting level
+- Automatically enforced by `make formatquery`
+
+### Preserving Format
+
+To exempt a node from formatting:
+
+```query
+; format-ignore
+(some_complex_node
+  that should keep its specific format)
+```
+
+## Inheriting Queries
+
+If your language extends another (e.g., TypeScript extends JavaScript), inherit base queries by adding as the **first line**:
+
+```query
+; inherits: javascript
+```
+
+For multiple languages:
+
+```query
+; inherits: base,(optional)
+```
+
+Optional languages (in parentheses) are inherited but not passed to inheriting languages.
+
+## Highlights Query
+
+The `highlights.scm` query assigns syntax tree nodes to highlight groups.
+
+### Valid Captures
+
+<Warning>
+  Only use captures from the lists below. Using invalid captures will cause `make lintquery` to fail.
+</Warning>
+
+#### Identifiers
+
+```query
+@variable                    ; various variable names
+@variable.builtin            ; built-in variable names (e.g. `this`)
+@variable.parameter          ; parameters of a function
+@variable.parameter.builtin  ; special parameters (e.g. `_`, `it`)
+@variable.member             ; object and struct fields
+
+@constant          ; constant identifiers
+@constant.builtin  ; built-in constant values
+@constant.macro    ; constants defined by the preprocessor
+
+@module            ; modules or namespaces
+@module.builtin    ; built-in modules or namespaces
+@label             ; GOTO and other labels, including heredoc labels
+```
+
+#### Literals
+
+```query
+@string                 ; string literals
+@string.documentation   ; string documenting code (e.g. Python docstrings)
+@string.regexp          ; regular expressions
+@string.escape          ; escape sequences
+@string.special         ; other special strings (e.g. dates)
+@string.special.symbol  ; symbols or atoms
+@string.special.url     ; URIs (e.g. hyperlinks)
+@string.special.path    ; filenames
+
+@character              ; character literals
+@character.special      ; special characters (e.g. wildcards)
+
+@boolean                ; boolean literals
+@number                 ; numeric literals
+@number.float           ; floating-point number literals
+```
+
+#### Types
+
+```query
+@type             ; type or class definitions and annotations
+@type.builtin     ; built-in types
+@type.definition  ; identifiers in type definitions
+
+@attribute          ; attribute annotations (e.g. Python decorators, Rust lifetimes)
+@attribute.builtin  ; builtin annotations
+@property           ; the key in key/value pairs
+```
+
+#### Functions
+
+```query
+@function             ; function definitions
+@function.builtin     ; built-in functions
+@function.call        ; function calls
+@function.macro       ; preprocessor macros
+
+@function.method      ; method definitions
+@function.method.call ; method calls
+
+@constructor          ; constructor calls and definitions
+@operator             ; symbolic operators (e.g. `+` / `*`)
+```
+
+#### Keywords
+
+```query
+@keyword                   ; keywords not fitting into specific categories
+@keyword.coroutine         ; keywords related to coroutines
+@keyword.function          ; keywords that define a function
+@keyword.operator          ; operators that are English words (e.g. `and` / `or`)
+@keyword.import            ; keywords for including or exporting modules
+@keyword.type              ; keywords describing namespaces and composite types
+@keyword.modifier          ; keywords modifying other constructs
+@keyword.repeat            ; keywords related to loops
+@keyword.return            ; keywords like `return` and `yield`
+@keyword.debug             ; keywords related to debugging
+@keyword.exception         ; keywords related to exceptions
+
+@keyword.conditional         ; keywords related to conditionals
+@keyword.conditional.ternary ; ternary operator (e.g. `?` / `:`)
+
+@keyword.directive         ; various preprocessor directives & shebangs
+@keyword.directive.define  ; preprocessor definition directives
+```
+
+#### Punctuation
+
+```query
+@punctuation.delimiter ; delimiters (e.g. `;` / `.` / `,`)
+@punctuation.bracket   ; brackets (e.g. `()` / `{}` / `[]`)
+@punctuation.special   ; special symbols (e.g. `{}` in string interpolation)
+```
+
+#### Comments
+
+```query
+@comment               ; line and block comments
+@comment.documentation ; comments documenting code
+
+@comment.error         ; error-type comments (e.g. `ERROR`, `FIXME`, `DEPRECATED`)
+@comment.warning       ; warning-type comments (e.g. `WARNING`, `FIX`, `HACK`)
+@comment.todo          ; todo-type comments (e.g. `TODO`, `WIP`)
+@comment.note          ; note-type comments (e.g. `NOTE`, `INFO`, `XXX`)
+```
+
+#### Markup
+
+Mainly for markup languages:
+
+```query
+@markup.strong         ; bold text
+@markup.italic         ; italic text
+@markup.strikethrough  ; struck-through text
+@markup.underline      ; underlined text (only for literal underline markup!)
+
+@markup.heading        ; headings, titles (including markers)
+@markup.heading.1      ; top-level heading
+@markup.heading.2      ; section heading
+@markup.heading.3      ; subsection heading
+@markup.heading.4      ; and so on
+@markup.heading.5      ; and so forth
+@markup.heading.6      ; six levels ought to be enough for anybody
+
+@markup.quote          ; block quotes
+@markup.math           ; math environments (e.g. `$ ... $` in LaTeX)
+
+@markup.link           ; text references, footnotes, citations, etc.
+@markup.link.label     ; link, reference descriptions
+@markup.link.url       ; URL-style links
+
+@markup.raw            ; literal or verbatim text (e.g. inline code)
+@markup.raw.block      ; literal or verbatim text as a stand-alone block
+                       ; (use priority 90 for blocks with injections)
+
+@markup.list           ; list markers
+@markup.list.checked   ; checked todo-style list markers
+@markup.list.unchecked ; unchecked todo-style list markers
+
+@diff.plus       ; added text (for diff files)
+@diff.minus      ; deleted text (for diff files)
+@diff.delta      ; changed text (for diff files)
+
+@tag           ; XML-style tag names (and similar)
+@tag.builtin   ; builtin tag names (e.g. HTML5 tags)
+@tag.attribute ; XML-style tag attributes
+@tag.delimiter ; XML-style tag delimiters
+```
+
+#### Non-highlighting Captures
+
+```query
+@conceal ; captures meant to be concealed
+@spell   ; regions to be spellchecked
+@nospell ; regions that should NOT be spellchecked
+```
+
+<Note>
+  For `@spell`, the main types to spell check are comments and strings (where it makes sense). Strings with interpolation or non-text purposes are typically not spell checked.
+</Note>
+
+### Predicates
+
+Captures can be restricted based on node contents using [predicates](https://neovim.io/doc/user/treesitter.html#treesitter-predicates).
+
+<Warning>
+  For performance reasons, prefer predicates in this order:
+  
+  1. `#eq?` - Literal match (fastest)
+  2. `#any-of?` - One of several literal matches
+  3. `#lua-match?` - Lua pattern matching
+  4. `#match?` / `#vim-match?` - Vim regex (slowest)
+</Warning>
+
+Additional predicates from nvim-treesitter:
+
+```query
+#kind-eq?      ; checks whether a capture corresponds to a given set of nodes
+#any-kind-eq?  ; checks whether any of a list of captures corresponds to a given set of nodes
+```
+
+### Directives
+
+Modify node metadata with [directives](https://neovim.io/doc/user/treesitter.html#treesitter-directives).
+
+#### Priority
+
+Control highlight precedence:
+
+```query
+((string) @string.special
+  (#set! priority 110))
+```
+
+<Note>
+  Default priority is 100. Queries should only set priorities between 90-120 to avoid conflicts with diagnostics and LSP semantic tokens.
+</Note>
+
+<Note>
+  Try reordering patterns before resorting to explicit priorities. Later patterns take precedence.
+</Note>
+
+#### Conceal
+
+For `@conceal` captures, use the `#offset!` directive to conceal only part of a capture:
+
+```query
+((string) @conceal
+  (#offset! @conceal 0 1 0 -1)) ; conceal quotes but not content
+```
+
+## Injections Query
+
+The `injections.scm` query specifies nodes that should be parsed as a different language.
+
+### Valid Captures
+
+```query
+@injection.language ; dynamic language detection (node text is the language name)
+@injection.content  ; region for the dynamically detected language
+@injection.filename ; node text may contain a filename; filetype is detected via vim.filetype.match()
+```
+
+<Note>
+  Try to ensure each captured node is matched by only a single pattern for best performance.
+</Note>
+
+## Folds Query
+
+The `folds.scm` query defines foldable regions. The only valid capture is:
+
+```query
+@fold ; fold this node
+```
+
+### Valid Fold Candidates
+
+Fold these items:
+
+- Function/method definitions
+- Class/interface/trait definitions
+- Switch/match statements and individual arms
+- Execution blocks (conditionals, loops)
+- Parameter/argument lists
+- Array/object/string expressions
+- Consecutive import statements
+- Consecutive line comments
+
+### Invalid Fold Candidates
+
+Do NOT fold:
+
+- Multiline assignment statements
+- Multiline property access expressions
+
+### Examples
+
+```query
+(function_definition) @fold
+(class_definition) @fold
+(block) @fold
+```
+
+## Indents Query
+
+<Warning>
+  Tree-sitter-based indentation is experimental and likely to have breaking changes in the future.
+</Warning>
+
+The `indents.scm` query controls automatic indentation.
+
+### Valid Captures
+
+- **`@indent.begin`** - Next line should be indented
+- **`@indent.end`** - Dedent subsequent text
+- **`@indent.branch`** - Dedent starts at line including the node
+- **`@indent.dedent`** - Dedent starts on next line
+- **`@indent.auto`** - Copy indentation from previous line
+- **`@indent.ignore`** - No indent should be added
+- **`@indent.zero`** - Remove all indentation
+- **`@indent.align`** - Blocks with same indentation
+
+### Immediate Indentation
+
+To allow indentation even when the block has no content yet:
+
+```query
+((if_statement) @indent.begin
+  (#set! indent.immediate 1))
+```
+
+### Align Blocks
+
+For aligning delimited content:
+
+```query
+((argument_list) @indent.align
+  (#set! indent.open_delimiter "(")
+  (#set! indent.close_delimiter ")"))
+```
+
+This allows both styles:
+
+```python
+foo(a,
+    b,
+    c)
+```
+
+```python
+foo(
+  a,
+  b,
+  c
+)
+```
+
+## Locals Query
+
+<Note>
+  nvim-treesitter does not use locals queries for highlighting or any other purpose. They are provided for limited backward compatibility only.
+</Note>
+
+### Valid Captures
+
+```query
+@local.definition            ; various definitions
+@local.definition.constant   ; constants
+@local.definition.function   ; functions
+@local.definition.method     ; methods
+@local.definition.var        ; variables
+@local.definition.parameter  ; parameters
+@local.definition.macro      ; preprocessor macros
+@local.definition.type       ; types or classes
+@local.definition.field      ; fields or properties
+@local.definition.enum       ; enumerations
+@local.definition.namespace  ; modules or namespaces
+@local.definition.import     ; imported names
+@local.definition.associated ; the associated type of a variable
+
+@local.scope                 ; scope block
+@local.reference             ; identifier reference
+```
+
+### Definition Scope
+
+Set the scope of a definition:
+
+```query
+(function_declaration
+  ((identifier) @local.definition.var)
+   (#set! definition.var.scope "parent"))
+```
+
+Scope values:
+
+- **`parent`** - Valid in containing scope and one level above
+- **`global`** - Valid in root scope
+- **`local`** - Valid in containing scope (default)
+
+## Testing Your Queries
+
+See the [Testing](/contributing/testing) page for how to test parsers and queries.
+
+## Common Issues
+
+### Invalid capture errors
+
+Run `make lintquery` to see which captures are invalid. Consult the capture lists in this guide.
+
+### Pattern doesn't match
+
+Use `:InspectTree` to see the actual node types in your syntax tree. Node names may differ from what you expect.
+
+### Highlight conflicts
+
+Adjust pattern order or use `#set! priority` to control precedence.
+
+### Query is slow
+
+Avoid expensive predicates like `#match?`. Use `#eq?` or `#any-of?` when possible.
+
+## Next Steps
+
+- [Test your queries](/contributing/testing) thoroughly
+- Use `:EditQuery` to experiment with patterns
+- Monitor issues related to your language's queries
+- Keep queries updated when parsers change
